@@ -55,5 +55,3 @@ Latency is defined as end-to-end wall-clock time for the full prefill + decode r
 - **Config A — Single stream, synchronous.** Baseline. Expected lowest DDI on both metrics, lowest throughput.
 - **Config B — Two streams, overlapped.** Expected higher Order DDI specifically, due to cross-stream kernel interleaving. Primary target for kernel-engineering mitigation.
 - **Config C — Single stream with background memory copy.** Isolates memory contention's effect on Timing DDI specifically, without introducing stream-level order non-determinism.
-
-*Config A is the only configuration in active scope until the full capture-and-breakdown pipeline is validated end-to-end on Thor.*
