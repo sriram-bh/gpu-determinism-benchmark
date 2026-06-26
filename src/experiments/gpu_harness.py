@@ -26,7 +26,7 @@ Usage:
     # or to save as a candidate G*.
 """
 
-from typing import List
+from typing import List, Tuple
 
 import torch
 from torch.profiler import profile, ProfilerActivity
@@ -110,11 +110,14 @@ def _load_model(device):
     return model, tokenizer
 
 
-def _run_prefill_and_decode(model, tokenizer, device) -> List[KernelEvent]:
+def _run_prefill_and_decode(model, tokenizer, device) -> Tuple[List[KernelEvent], List[int]]:
     """
     Runs one full prefill + decode pass with per-step profiling,
     capturing every kernel dispatch and returning them as KernelEvent
     objects tagged with decode_step and tensor_bytes.
+
+    Returns (events, token_ids) where token_ids is the list of generated
+    token IDs at each step (length DECODE_STEPS + 1).
 
     Each decode step gets its own profiler context so events are cleanly
     separated per step — no cumulative aggregation across the loop.
@@ -123,6 +126,7 @@ def _run_prefill_and_decode(model, tokenizer, device) -> List[KernelEvent]:
     """
     logical_clock_state = {"tag": 0}
     all_events: List[KernelEvent] = []
+    token_ids: List[int] = []
 
     inputs = tokenizer(FIXED_INPUT_SENTENCE, return_tensors="pt").to(device)
     past_key_values = None
@@ -135,17 +139,15 @@ def _run_prefill_and_decode(model, tokenizer, device) -> List[KernelEvent]:
         ) as step_prof:
             with torch.no_grad():
                 if decode_step == 0:
-                    # Prefill: process the full fixed input sentence at once.
                     outputs = model(input_ids, use_cache=True)
                 else:
-                    # Decode: process only the newly generated token, using
-                    # the cached K/V from all previous steps.
                     outputs = model(
                         next_token, past_key_values=past_key_values, use_cache=True
                     )
 
                 past_key_values = outputs.past_key_values
                 next_token = torch.argmax(outputs.logits[:, -1, :], dim=-1, keepdim=True)
+                token_ids.append(next_token.item())
 
             torch.cuda.synchronize()
 
@@ -172,7 +174,7 @@ def _run_prefill_and_decode(model, tokenizer, device) -> List[KernelEvent]:
                 )
             )
 
-    return all_events
+    return all_events, token_ids
 
 
 def run_single_pass(seed: int = SEED) -> List[KernelEvent]:
@@ -190,15 +192,17 @@ def run_single_pass(seed: int = SEED) -> List[KernelEvent]:
     _configure_deterministic_mode(seed)
 
     model, tokenizer = _load_model(device)
-    return _run_prefill_and_decode(model, tokenizer, device)
+    events, _token_ids = _run_prefill_and_decode(model, tokenizer, device)
+    return events
 
 
-def run_n_validation_passes(n: int = 5, seed: int = SEED) -> List[List[KernelEvent]]:
+def run_n_validation_passes(n: int = 5, seed: int = SEED) -> Tuple[List[List[KernelEvent]], List[List[int]]]:
     """
     Runs `n` passes under identical controlled conditions, for G*
-    validation (see src/metrics/ddi.py:validate_gstar). Returns a list
-    of per-run KernelEvent lists. The caller is responsible for checking
-    bit-identity across runs before accepting any of them as G*.
+    validation (see src/metrics/ddi.py:validate_gstar). Returns
+    (all_event_lists, all_token_lists) — one per run. The caller is
+    responsible for checking bit-identity across runs before accepting
+    any of them as G*.
 
     Loads the model once and reuses it across all passes.
     """
@@ -211,7 +215,13 @@ def run_n_validation_passes(n: int = 5, seed: int = SEED) -> List[List[KernelEve
 
     _configure_deterministic_mode(seed)
     model, tokenizer = _load_model(device)
-    return [_run_prefill_and_decode(model, tokenizer, device) for _ in range(n)]
+    all_events = []
+    all_tokens = []
+    for _ in range(n):
+        events, token_ids = _run_prefill_and_decode(model, tokenizer, device)
+        all_events.append(events)
+        all_tokens.append(token_ids)
+    return all_events, all_tokens
 
 
 def run_warmup(model, tokenizer, device, n: int = 3):
@@ -257,7 +267,7 @@ if __name__ == "__main__":
     run_warmup(model, tokenizer, device, n=3)
 
     print(f"\nRunning single profiled pass ({DECODE_STEPS} decode steps)...")
-    events = _run_prefill_and_decode(model, tokenizer, device)
+    events, token_ids = _run_prefill_and_decode(model, tokenizer, device)
 
     print(f"\nCaptured {len(events)} kernel events total.")
 
@@ -272,6 +282,9 @@ if __name__ == "__main__":
     print("Top 10 most frequent:")
     for name, count in name_counts.most_common(10):
         print(f"  {count:4d}x  {name}")
+
+    print(f"\nGenerated tokens: {token_ids}")
+    print(f"Decoded text: {tokenizer.decode(token_ids)}")
 
     if events:
         prefill_events = [e for e in events if e.decode_step == 0]
