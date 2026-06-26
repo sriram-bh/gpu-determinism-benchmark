@@ -23,19 +23,16 @@ from collections import Counter
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
 import torch
-from torch.profiler import profile, ProfilerActivity
 from src.experiments.gpu_harness import (
     _configure_deterministic_mode,
     _load_model,
-    _tensor_bytes_for_event,
     _run_prefill_and_decode,
-    cupti_lf_bridge,
     run_warmup,
     DECODE_STEPS,
     SEED,
     FIXED_INPUT_SENTENCE,
 )
-from src.metrics.schema import KernelEvent, events_to_dicts
+from src.metrics.schema import events_to_dicts
 from src.metrics.ddi import (
     align_events,
     compute_timing_ddi,
@@ -59,130 +56,31 @@ def make_contention_fn(device):
 
 def run_graph_pass(model, tokenizer, device, pre_step_fn=None):
     """
-    Run prefill eagerly, then capture and replay a CUDA graph for each
-    decode step using StaticCache (pre-allocated KV memory).
+    Run inference with torch.compile(mode='reduce-overhead'), which
+    uses CUDA graphs internally. PyTorch handles the graph capture
+    and cache management automatically.
     """
-    from transformers import StaticCache
+    model_graphed = torch.compile(model, mode="reduce-overhead")
 
-    logical_clock_state = {"tag": 0}
-    all_events = []
-    token_ids = []
-
+    # Warmup: compile triggers JIT + graph capture on first few runs
     inputs = tokenizer(FIXED_INPUT_SENTENCE, return_tensors="pt").to(device)
-    input_ids = inputs["input_ids"]
-    batch_size = input_ids.shape[0]
-    seq_len = input_ids.shape[1]
-    max_cache_len = seq_len + DECODE_STEPS + 2
-
-    # Pre-allocate static cache
-    static_cache = StaticCache(
-        config=model.config,
-        batch_size=batch_size,
-        max_cache_len=max_cache_len,
-        device=device,
-        dtype=torch.float32,
-    )
-
-    # Step 0 (prefill): run eagerly with static cache
-    cache_position = torch.arange(seq_len, device=device)
-    with profile(
-        activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
-        record_shapes=True,
-    ) as prefill_prof:
-        if pre_step_fn:
-            pre_step_fn(0)
+    print("    Graph warmup (JIT + capture)...")
+    for _ in range(3):
+        past = None
+        inp = inputs["input_ids"]
         with torch.no_grad():
-            outputs = model(
-                input_ids,
-                past_key_values=static_cache,
-                cache_position=cache_position,
-                use_cache=True,
-            )
-            next_token = torch.argmax(outputs.logits[:, -1, :], dim=-1, keepdim=True)
-            token_ids.append(next_token.item())
+            for step in range(DECODE_STEPS + 1):
+                if step == 0:
+                    out = model_graphed(inp, use_cache=True)
+                else:
+                    out = model_graphed(tok, past_key_values=past, use_cache=True)
+                past = out.past_key_values
+                tok = torch.argmax(out.logits[:, -1, :], dim=-1, keepdim=True)
         torch.cuda.synchronize()
+    print("    Graph warmup done.")
 
-    _extract_events(prefill_prof, 0, logical_clock_state, all_events)
-
-    # Decode steps: capture one graph (all decode steps have the same
-    # tensor shapes with StaticCache — only cache_position changes)
-    cur_pos = seq_len
-
-    # Static input buffers for graph capture
-    static_token = next_token.clone()
-    static_pos = torch.tensor([cur_pos], device=device)
-
-    # Warmup run (required before CUDA graph capture)
-    with torch.no_grad():
-        _ = model(
-            static_token,
-            past_key_values=static_cache,
-            cache_position=static_pos,
-            use_cache=True,
-        )
-    torch.cuda.synchronize()
-
-    # Capture the decode-step graph (one graph reused for all steps)
-    graph = torch.cuda.CUDAGraph()
-    with torch.cuda.graph(graph):
-        with torch.no_grad():
-            static_outputs = model(
-                static_token,
-                past_key_values=static_cache,
-                cache_position=static_pos,
-                use_cache=True,
-            )
-
-    # Replay for each decode step
-    for decode_step in range(1, DECODE_STEPS + 1):
-        cur_pos = seq_len + decode_step - 1
-        static_token.copy_(next_token)
-        static_pos.fill_(cur_pos)
-
-        with profile(
-            activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
-            record_shapes=True,
-        ) as step_prof:
-            if pre_step_fn:
-                pre_step_fn(decode_step)
-            graph.replay()
-            torch.cuda.synchronize()
-
-        _extract_events(step_prof, decode_step, logical_clock_state, all_events)
-
-        next_token = torch.argmax(
-            static_outputs.logits[:, -1, :], dim=-1, keepdim=True
-        )
-        token_ids.append(next_token.item())
-
-    return all_events, token_ids
-
-
-def _extract_events(prof, decode_step, logical_clock_state, all_events):
-    step_events = sorted(prof.events(), key=lambda e: e.time_range.start)
-    for evt in step_events:
-        if evt.key.startswith("aten::"):
-            continue
-        cuda_time_us = evt.self_device_time_total
-        if cuda_time_us <= 0:
-            continue
-
-        duration_ns = int(cuda_time_us * 1000)
-        wall_ns = int(evt.time_range.start * 1000)
-        tag = cupti_lf_bridge(wall_ns, logical_clock_state)
-        tensor_bytes = _tensor_bytes_for_event(evt)
-
-        all_events.append(
-            KernelEvent(
-                kernel_name=evt.key,
-                wall_ns=wall_ns,
-                logical_tag=tag,
-                duration_ns=duration_ns,
-                decode_step=decode_step,
-                tensor_bytes=tensor_bytes,
-                stream_id=0,
-            )
-        )
+    # Profiled run using _run_prefill_and_decode with the compiled model
+    return _run_prefill_and_decode(model_graphed, tokenizer, device, pre_step_fn=pre_step_fn)
 
 
 def print_summary(events, label):
