@@ -153,6 +153,8 @@ def _run_prefill_and_decode(model, tokenizer, device) -> Tuple[List[KernelEvent]
 
         step_events = sorted(step_prof.events(), key=lambda e: e.time_range.start)
         for evt in step_events:
+            if evt.key.startswith("aten::"):
+                continue
             cuda_time_us = evt.self_device_time_total
             if cuda_time_us <= 0:
                 continue
