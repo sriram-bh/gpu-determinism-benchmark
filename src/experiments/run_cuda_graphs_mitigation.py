@@ -60,25 +60,31 @@ def make_contention_fn(device):
 def run_graph_pass(model, tokenizer, device, pre_step_fn=None):
     """
     Run prefill eagerly, then capture and replay a CUDA graph for each
-    decode step. Each step gets its own graph since KV cache shape changes.
+    decode step using StaticCache (pre-allocated KV memory).
     """
+    from transformers import StaticCache
+
     logical_clock_state = {"tag": 0}
     all_events = []
     token_ids = []
 
     inputs = tokenizer(FIXED_INPUT_SENTENCE, return_tensors="pt").to(device)
     input_ids = inputs["input_ids"]
+    batch_size = input_ids.shape[0]
+    seq_len = input_ids.shape[1]
+    max_cache_len = seq_len + DECODE_STEPS + 2
 
-    # Step 0 (prefill): run eagerly — different shape from decode steps
-    with torch.no_grad():
-        outputs = model(input_ids, use_cache=True)
-        past_key_values = outputs.past_key_values
-        next_token = torch.argmax(outputs.logits[:, -1, :], dim=-1, keepdim=True)
-        token_ids.append(next_token.item())
-    torch.cuda.synchronize()
+    # Pre-allocate static cache
+    static_cache = StaticCache(
+        config=model.config,
+        batch_size=batch_size,
+        max_cache_len=max_cache_len,
+        device=device,
+        dtype=torch.float32,
+    )
 
-    # Profile the prefill step separately (eager, no graph)
-    # Re-run it under profiler for measurement
+    # Step 0 (prefill): run eagerly with static cache
+    cache_position = torch.arange(seq_len, device=device)
     with profile(
         activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
         record_shapes=True,
@@ -86,64 +92,52 @@ def run_graph_pass(model, tokenizer, device, pre_step_fn=None):
         if pre_step_fn:
             pre_step_fn(0)
         with torch.no_grad():
-            outputs = model(input_ids, use_cache=True)
-            past_key_values = outputs.past_key_values
+            outputs = model(
+                input_ids,
+                past_key_values=static_cache,
+                cache_position=cache_position,
+                use_cache=True,
+            )
             next_token = torch.argmax(outputs.logits[:, -1, :], dim=-1, keepdim=True)
+            token_ids.append(next_token.item())
         torch.cuda.synchronize()
 
     _extract_events(prefill_prof, 0, logical_clock_state, all_events)
 
-    # Decode steps 1..DECODE_STEPS: capture and replay CUDA graphs
-    for decode_step in range(1, DECODE_STEPS + 1):
-        # Capture phase: record the computation into a graph
-        # First, do a warmup run for this step (required before capture)
+    # Decode steps: capture one graph (all decode steps have the same
+    # tensor shapes with StaticCache — only cache_position changes)
+    cur_pos = seq_len
+
+    # Static input buffers for graph capture
+    static_token = next_token.clone()
+    static_pos = torch.tensor([cur_pos], device=device)
+
+    # Warmup run (required before CUDA graph capture)
+    with torch.no_grad():
+        _ = model(
+            static_token,
+            past_key_values=static_cache,
+            cache_position=static_pos,
+            use_cache=True,
+        )
+    torch.cuda.synchronize()
+
+    # Capture the decode-step graph (one graph reused for all steps)
+    graph = torch.cuda.CUDAGraph()
+    with torch.cuda.graph(graph):
         with torch.no_grad():
-            outputs = model(
-                next_token, past_key_values=past_key_values, use_cache=True
-            )
-        torch.cuda.synchronize()
-
-        # Prepare static inputs for graph capture
-        static_next_token = next_token.clone()
-
-        # Handle past_key_values — may be DynamicCache or tuple, may contain Nones
-        def clone_past(pkv):
-            if hasattr(pkv, 'key_cache'):
-                # DynamicCache object — clone the internal lists
-                from copy import deepcopy
-                return deepcopy(pkv)
-            return tuple(
-                tuple(t.clone() if t is not None else None for t in layer)
-                for layer in pkv
+            static_outputs = model(
+                static_token,
+                past_key_values=static_cache,
+                cache_position=static_pos,
+                use_cache=True,
             )
 
-        def copy_past(dst, src):
-            if hasattr(dst, 'key_cache'):
-                for i in range(len(dst.key_cache)):
-                    dst.key_cache[i].copy_(src.key_cache[i])
-                    dst.value_cache[i].copy_(src.value_cache[i])
-            else:
-                for dst_layer, src_layer in zip(dst, src):
-                    for d, s in zip(dst_layer, src_layer):
-                        if d is not None and s is not None:
-                            d.copy_(s)
-
-        static_past = clone_past(past_key_values)
-
-        # Capture the graph
-        graph = torch.cuda.CUDAGraph()
-        with torch.cuda.graph(graph):
-            with torch.no_grad():
-                static_outputs = model(
-                    static_next_token,
-                    past_key_values=static_past,
-                    use_cache=True,
-                )
-
-        # Replay phase: profile the graph replay under optional contention
-        # Copy real data into static buffers
-        static_next_token.copy_(next_token)
-        copy_past(static_past, past_key_values)
+    # Replay for each decode step
+    for decode_step in range(1, DECODE_STEPS + 1):
+        cur_pos = seq_len + decode_step - 1
+        static_token.copy_(next_token)
+        static_pos.fill_(cur_pos)
 
         with profile(
             activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
@@ -156,8 +150,6 @@ def run_graph_pass(model, tokenizer, device, pre_step_fn=None):
 
         _extract_events(step_prof, decode_step, logical_clock_state, all_events)
 
-        # Extract results from static output buffers
-        past_key_values = static_outputs.past_key_values
         next_token = torch.argmax(
             static_outputs.logits[:, -1, :], dim=-1, keepdim=True
         )
@@ -255,30 +247,6 @@ def main():
         import traceback
         print(f"  CUDA Graph capture failed: {e}")
         traceback.print_exc()
-
-        # Debug: inspect past_key_values structure
-        print("\n  DEBUG: Inspecting past_key_values structure...")
-        _configure_deterministic_mode()
-        with torch.no_grad():
-            dbg_out = model(
-                tokenizer(FIXED_INPUT_SENTENCE, return_tensors="pt").to(device)["input_ids"],
-                use_cache=True,
-            )
-        pkv = dbg_out.past_key_values
-        print(f"  Type: {type(pkv)}")
-        print(f"  Has key_cache: {hasattr(pkv, 'key_cache')}")
-        if hasattr(pkv, 'key_cache'):
-            print(f"  key_cache length: {len(pkv.key_cache)}")
-            print(f"  key_cache[0] type: {type(pkv.key_cache[0])}, shape: {pkv.key_cache[0].shape if pkv.key_cache[0] is not None else None}")
-        elif hasattr(pkv, '__len__'):
-            print(f"  Length: {len(pkv)}")
-            if len(pkv) > 0:
-                layer0 = pkv[0]
-                print(f"  Layer 0 type: {type(layer0)}, len: {len(layer0) if hasattr(layer0, '__len__') else 'N/A'}")
-                if hasattr(layer0, '__len__'):
-                    for j, t in enumerate(layer0):
-                        print(f"    Element {j}: type={type(t)}, is_none={t is None}, shape={t.shape if hasattr(t, 'shape') else 'N/A'}")
-
         graph_available = False
 
     if graph_available:
