@@ -109,7 +109,8 @@ def main():
 
     # --- Condition 1: Eager baseline ---
     print("\n=== Condition 1: EAGER BASELINE (Config A) ===")
-    _configure_deterministic_mode()
+    torch.manual_seed(SEED)
+    torch.cuda.manual_seed_all(SEED)
     eager_base_events, eager_base_tokens = _run_prefill_and_decode(
         model_eager, tokenizer, device
     )
@@ -123,7 +124,8 @@ def main():
 
     # --- Condition 2: Eager + contention ---
     print("\n=== Condition 2: EAGER + CONTENTION (Config B-2streams) ===")
-    _configure_deterministic_mode()
+    torch.manual_seed(SEED)
+    torch.cuda.manual_seed_all(SEED)
     eager_cont_events, eager_cont_tokens = _run_prefill_and_decode(
         model_eager, tokenizer, device, pre_step_fn=contention_fn
     )
@@ -145,7 +147,8 @@ def main():
     if compiled_available:
         # --- Condition 3: Compiled baseline ---
         print("\n=== Condition 3: COMPILED BASELINE (Config A + torch.compile) ===")
-        _configure_deterministic_mode()
+        torch.manual_seed(SEED)
+        torch.cuda.manual_seed_all(SEED)
         comp_base_events, comp_base_tokens = _run_prefill_and_decode(
             model_compiled, tokenizer, device
         )
@@ -161,7 +164,8 @@ def main():
 
         # --- Condition 4: Compiled + contention ---
         print("\n=== Condition 4: COMPILED + CONTENTION (Config B + torch.compile) ===")
-        _configure_deterministic_mode()
+        torch.manual_seed(SEED)
+        torch.cuda.manual_seed_all(SEED)
         comp_cont_events, comp_cont_tokens = _run_prefill_and_decode(
             model_compiled, tokenizer, device, pre_step_fn=contention_fn
         )
