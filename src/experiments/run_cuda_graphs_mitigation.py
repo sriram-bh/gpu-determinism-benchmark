@@ -105,9 +105,30 @@ def run_graph_pass(model, tokenizer, device, pre_step_fn=None):
 
         # Prepare static inputs for graph capture
         static_next_token = next_token.clone()
-        static_past = tuple(
-            tuple(t.clone() for t in layer) for layer in past_key_values
-        )
+
+        # Handle past_key_values — may be DynamicCache or tuple, may contain Nones
+        def clone_past(pkv):
+            if hasattr(pkv, 'key_cache'):
+                # DynamicCache object — clone the internal lists
+                from copy import deepcopy
+                return deepcopy(pkv)
+            return tuple(
+                tuple(t.clone() if t is not None else None for t in layer)
+                for layer in pkv
+            )
+
+        def copy_past(dst, src):
+            if hasattr(dst, 'key_cache'):
+                for i in range(len(dst.key_cache)):
+                    dst.key_cache[i].copy_(src.key_cache[i])
+                    dst.value_cache[i].copy_(src.value_cache[i])
+            else:
+                for dst_layer, src_layer in zip(dst, src):
+                    for d, s in zip(dst_layer, src_layer):
+                        if d is not None and s is not None:
+                            d.copy_(s)
+
+        static_past = clone_past(past_key_values)
 
         # Capture the graph
         graph = torch.cuda.CUDAGraph()
@@ -122,9 +143,7 @@ def run_graph_pass(model, tokenizer, device, pre_step_fn=None):
         # Replay phase: profile the graph replay under optional contention
         # Copy real data into static buffers
         static_next_token.copy_(next_token)
-        for (sk, sv), (rk, rv) in zip(static_past, past_key_values):
-            sk.copy_(rk)
-            sv.copy_(rv)
+        copy_past(static_past, past_key_values)
 
         with profile(
             activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
