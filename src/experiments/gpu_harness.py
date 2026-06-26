@@ -110,7 +110,7 @@ def _load_model(device):
     return model, tokenizer
 
 
-def _run_prefill_and_decode(model, tokenizer, device) -> Tuple[List[KernelEvent], List[int]]:
+def _run_prefill_and_decode(model, tokenizer, device, pre_step_fn=None) -> Tuple[List[KernelEvent], List[int]]:
     """
     Runs one full prefill + decode pass with per-step profiling,
     capturing every kernel dispatch and returning them as KernelEvent
@@ -119,10 +119,9 @@ def _run_prefill_and_decode(model, tokenizer, device) -> Tuple[List[KernelEvent]
     Returns (events, token_ids) where token_ids is the list of generated
     token IDs at each step (length DECODE_STEPS + 1).
 
-    Each decode step gets its own profiler context so events are cleanly
-    separated per step — no cumulative aggregation across the loop.
-    Uses events() (individual dispatch records) not key_averages()
-    (which aggregates by name, destroying per-dispatch identity).
+    pre_step_fn: optional callable(decode_step) invoked inside each
+    step's profiler window before the forward pass. Used by Config B/C
+    to inject competing work on other streams.
     """
     logical_clock_state = {"tag": 0}
     all_events: List[KernelEvent] = []
@@ -137,6 +136,8 @@ def _run_prefill_and_decode(model, tokenizer, device) -> Tuple[List[KernelEvent]
             activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
             record_shapes=True,
         ) as step_prof:
+            if pre_step_fn:
+                pre_step_fn(decode_step)
             with torch.no_grad():
                 if decode_step == 0:
                     outputs = model(input_ids, use_cache=True)
