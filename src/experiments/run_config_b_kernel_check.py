@@ -10,7 +10,6 @@ Run from repo root:
 """
 
 import json
-import threading
 import sys
 import os
 
@@ -25,13 +24,6 @@ from src.experiments.gpu_harness import (
     DECODE_STEPS,
     SEED,
 )
-
-
-def _competing_sort_work(stream, stop_event, device):
-    data = torch.randn(100000, device=device)
-    with torch.cuda.stream(stream):
-        while not stop_event.is_set():
-            torch.sort(data)
 
 
 def main():
@@ -60,19 +52,22 @@ def main():
     print("\nRunning 3 warmup passes (unprofiled, no competing work)...")
     run_warmup(model, tokenizer, device, n=3)
 
-    # Launch competing work on stream 1
+    # Pre-queue competing work on stream 1 (no threading — CUPTI is not
+    # thread-safe on Thor). CUDA ops are async, so these execute on the
+    # GPU concurrently with the inference on stream 0.
     stream1 = torch.cuda.Stream()
-    stop_event = threading.Event()
-    worker = threading.Thread(
-        target=_competing_sort_work, args=(stream1, stop_event, device)
-    )
+    contention_data = torch.randn(5000000, device=device)
+    contention_out = torch.empty_like(contention_data)
+    n_contention_ops = 50000
 
-    print(f"\nRunning Config B: GPT-2 on stream 0 + sort contention on stream 1...")
-    worker.start()
+    print(f"\nQueuing {n_contention_ops} cumsum ops on stream 1...")
+    with torch.cuda.stream(stream1):
+        for _ in range(n_contention_ops):
+            torch.cumsum(contention_data, dim=0, out=contention_out)
+
+    print(f"Running Config B: GPT-2 on stream 0 (stream 1 executing concurrently)...")
     events, token_ids = _run_prefill_and_decode(model, tokenizer, device)
-    stop_event.set()
     stream1.synchronize()
-    worker.join()
 
     # Analyze kernel names
     configb_names = set(e.kernel_name for e in events)
