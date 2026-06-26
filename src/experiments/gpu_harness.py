@@ -3,17 +3,16 @@ src/experiments/gpu_harness.py
 
 GPU-only harness. Assumes CUDA + CUPTI are present (i.e. running on Thor).
 This will NOT run successfully without a CUDA device — there is no CPU
-fallback path. It is written now so that the moment Thor is available,
-this is ready to execute as-is.
+fallback path.
 
 What it does:
   1. Loads GPT-2 Small onto the GPU.
   2. Runs prefill on a fixed 20-token input, then decodes a fixed number
      of additional tokens, one at a time.
-  3. Captures every individual CUDA kernel dispatch during the entire
-     run via CUPTI (through torch.profiler, which wraps CUPTI), tagging
-     each captured kernel with: decode_step (which step it occurred in,
-     0 = prefill) and tensor_bytes (size of its primary operand).
+  3. Captures every individual CUDA kernel dispatch during each step
+     via CUPTI (through torch.profiler), tagging each captured kernel
+     with: decode_step (which step it occurred in, 0 = prefill) and
+     tensor_bytes (size of its primary operand).
   4. Lifts each kernel's wall-clock timestamp into an LF logical tag via
      the CUPTI -> LF bridge (see cupti_lf_bridge in this same file).
   5. Returns a List[KernelEvent] for the run, in the shared schema format
@@ -27,8 +26,7 @@ Usage:
     # or to save as a candidate G*.
 """
 
-import time
-from typing import List, Optional
+from typing import List
 
 import torch
 from torch.profiler import profile, ProfilerActivity
@@ -46,7 +44,7 @@ MODEL_NAME = "gpt2"
 SEED = 42
 
 
-def _configure_deterministic_mode():
+def _configure_deterministic_mode(seed: int = SEED):
     """
     Forces deterministic CUDA execution. Required for G* validation runs.
     See spec.md Section 3 for why each of these matters.
@@ -54,8 +52,8 @@ def _configure_deterministic_mode():
     torch.use_deterministic_algorithms(True)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
-    torch.manual_seed(SEED)
-    torch.cuda.manual_seed_all(SEED)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
 
 
 def cupti_lf_bridge(wall_ns: int, logical_clock_state: dict) -> int:
@@ -104,51 +102,65 @@ def _product(shape) -> int:
     return p
 
 
-def _run_prefill_and_decode(model, tokenizer, device, profiler_ctx) -> List[KernelEvent]:
+def _load_model(device):
+    """Load GPT-2 and its tokenizer onto the given device."""
+    tokenizer = GPT2Tokenizer.from_pretrained(MODEL_NAME)
+    model = GPT2LMHeadModel.from_pretrained(MODEL_NAME).to(device)
+    model.eval()
+    return model, tokenizer
+
+
+def _run_prefill_and_decode(model, tokenizer, device) -> List[KernelEvent]:
     """
-    Runs one full prefill + decode pass, capturing every kernel dispatch
-    via the active torch.profiler context, and returns them as KernelEvent
+    Runs one full prefill + decode pass with per-step profiling,
+    capturing every kernel dispatch and returning them as KernelEvent
     objects tagged with decode_step and tensor_bytes.
+
+    Each decode step gets its own profiler context so events are cleanly
+    separated per step — no cumulative aggregation across the loop.
+    Uses events() (individual dispatch records) not key_averages()
+    (which aggregates by name, destroying per-dispatch identity).
     """
     logical_clock_state = {"tag": 0}
-    events: List[KernelEvent] = []
+    all_events: List[KernelEvent] = []
 
     inputs = tokenizer(FIXED_INPUT_SENTENCE, return_tensors="pt").to(device)
     past_key_values = None
     input_ids = inputs["input_ids"]
 
-    # decode_step = 0 is prefill. 1..DECODE_STEPS are the generated tokens.
     for decode_step in range(0, DECODE_STEPS + 1):
-        with torch.no_grad():
-            if decode_step == 0:
-                # Prefill: process the full fixed input sentence at once.
-                outputs = model(input_ids, use_cache=True)
-            else:
-                # Decode: process only the newly generated token, using
-                # the cached K/V from all previous steps.
-                outputs = model(
-                    next_token, past_key_values=past_key_values, use_cache=True
-                )
+        with profile(
+            activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+            record_shapes=True,
+        ) as step_prof:
+            with torch.no_grad():
+                if decode_step == 0:
+                    # Prefill: process the full fixed input sentence at once.
+                    outputs = model(input_ids, use_cache=True)
+                else:
+                    # Decode: process only the newly generated token, using
+                    # the cached K/V from all previous steps.
+                    outputs = model(
+                        next_token, past_key_values=past_key_values, use_cache=True
+                    )
 
-            past_key_values = outputs.past_key_values
-            next_token = torch.argmax(outputs.logits[:, -1, :], dim=-1, keepdim=True)
+                past_key_values = outputs.past_key_values
+                next_token = torch.argmax(outputs.logits[:, -1, :], dim=-1, keepdim=True)
 
-        torch.cuda.synchronize()  # ensure all kernels for this step have completed
+            torch.cuda.synchronize()
 
-        # Pull this step's kernel events out of the profiler and tag them.
-        step_events = profiler_ctx.key_averages(group_by_input_shape=True)
-        # NOTE: torch.profiler aggregates across the whole `with` block by
-        # default. On Thor, replace this with per-step profiler start/stop
-        # (torch.profiler.profile(schedule=...)) so each decode_step gets
-        # its own clean event window rather than a cumulative one. This is
-        # flagged here as the one piece that needs real-hardware tuning.
+        step_events = sorted(step_prof.events(), key=lambda e: e.time_range.start)
         for evt in step_events:
-            wall_ns = int(evt.self_cuda_time_total * 1000)  # us -> ns
-            duration_ns = wall_ns
+            cuda_time_us = evt.self_cuda_time_total
+            if cuda_time_us <= 0:
+                continue
+
+            duration_ns = int(cuda_time_us * 1000)  # µs -> ns
+            wall_ns = int(evt.time_range.start * 1000)  # µs -> ns
             tag = cupti_lf_bridge(wall_ns, logical_clock_state)
             tensor_bytes = _tensor_bytes_for_event(evt)
 
-            events.append(
+            all_events.append(
                 KernelEvent(
                     kernel_name=evt.key,
                     wall_ns=wall_ns,
@@ -156,11 +168,11 @@ def _run_prefill_and_decode(model, tokenizer, device, profiler_ctx) -> List[Kern
                     duration_ns=duration_ns,
                     decode_step=decode_step,
                     tensor_bytes=tensor_bytes,
-                    stream_id=0,  # Config A: single stream throughout
+                    stream_id=0,
                 )
             )
 
-    return events
+    return all_events
 
 
 def run_single_pass(seed: int = SEED) -> List[KernelEvent]:
@@ -175,43 +187,102 @@ def run_single_pass(seed: int = SEED) -> List[KernelEvent]:
             "(NVIDIA Thor) and will not run on CPU."
         )
 
-    _configure_deterministic_mode()
+    _configure_deterministic_mode(seed)
 
-    tokenizer = GPT2Tokenizer.from_pretrained(MODEL_NAME)
-    model = GPT2LMHeadModel.from_pretrained(MODEL_NAME).to(device)
-    model.eval()
-
-    with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA]) as prof:
-        events = _run_prefill_and_decode(model, tokenizer, device, prof)
-
-    return events
+    model, tokenizer = _load_model(device)
+    return _run_prefill_and_decode(model, tokenizer, device)
 
 
 def run_n_validation_passes(n: int = 5, seed: int = SEED) -> List[List[KernelEvent]]:
     """
     Runs `n` passes under identical controlled conditions, for G*
-    validation (see src/metrics/validate_gstar.py). Returns a list of
-    per-run KernelEvent lists. The caller is responsible for checking
+    validation (see src/metrics/ddi.py:validate_gstar). Returns a list
+    of per-run KernelEvent lists. The caller is responsible for checking
     bit-identity across runs before accepting any of them as G*.
+
+    Loads the model once and reuses it across all passes.
     """
-    return [run_single_pass(seed=seed) for _ in range(n)]
+    device = torch.device("cuda")
+    if not torch.cuda.is_available():
+        raise RuntimeError(
+            "No CUDA device available. This harness requires a GPU "
+            "(NVIDIA Thor) and will not run on CPU."
+        )
+
+    _configure_deterministic_mode(seed)
+    model, tokenizer = _load_model(device)
+    return [_run_prefill_and_decode(model, tokenizer, device) for _ in range(n)]
 
 
-def run_warmup(n: int = 10, seed: int = SEED):
+def run_warmup(model, tokenizer, device, n: int = 3):
     """
-    Runs `n` warmup passes (not returned, not logged) to stabilize GPU
-    clocks and warm caches before any measurement run.
+    Runs `n` warmup passes (unprofiled) to stabilize GPU clocks and
+    warm caches before any measurement run.
     """
+    inputs = tokenizer(FIXED_INPUT_SENTENCE, return_tensors="pt").to(device)
     for _ in range(n):
-        run_single_pass(seed=seed)
+        past_key_values = None
+        input_ids = inputs["input_ids"]
+        for step in range(DECODE_STEPS + 1):
+            with torch.no_grad():
+                if step == 0:
+                    outputs = model(input_ids, use_cache=True)
+                else:
+                    outputs = model(
+                        next_token, past_key_values=past_key_values, use_cache=True
+                    )
+                past_key_values = outputs.past_key_values
+                next_token = torch.argmax(outputs.logits[:, -1, :], dim=-1, keepdim=True)
+            torch.cuda.synchronize()
 
 
 if __name__ == "__main__":
-    print("This harness requires CUDA and will only run on Thor.")
+    from collections import Counter
+
+    print("GPU Determinism Benchmark Harness")
     print(f"torch.cuda.is_available(): {torch.cuda.is_available()}")
-    if torch.cuda.is_available():
-        print("Running warmup...")
-        run_warmup(n=10)
-        print("Running single pass...")
-        events = run_single_pass()
-        print(f"Captured {len(events)} kernel events.")
+    if not torch.cuda.is_available():
+        print("No CUDA device. Exiting.")
+        sys.exit(1)
+
+    device = torch.device("cuda")
+    print(f"Device: {torch.cuda.get_device_name(device)}")
+    print(f"CUDA version: {torch.version.cuda}")
+    print(f"PyTorch version: {torch.__version__}")
+
+    _configure_deterministic_mode()
+    model, tokenizer = _load_model(device)
+
+    print(f"\nRunning 3 warmup passes (unprofiled)...")
+    run_warmup(model, tokenizer, device, n=3)
+
+    print(f"\nRunning single profiled pass ({DECODE_STEPS} decode steps)...")
+    events = _run_prefill_and_decode(model, tokenizer, device)
+
+    print(f"\nCaptured {len(events)} kernel events total.")
+
+    step_counts = Counter(e.decode_step for e in events)
+    print(f"\nEvents per decode step:")
+    for step in sorted(step_counts):
+        label = "prefill" if step == 0 else f"decode {step}"
+        print(f"  {label}: {step_counts[step]} kernels")
+
+    name_counts = Counter(e.kernel_name for e in events)
+    print(f"\nDistinct kernel names: {len(name_counts)}")
+    print("Top 10 most frequent:")
+    for name, count in name_counts.most_common(10):
+        print(f"  {count:4d}x  {name}")
+
+    if events:
+        prefill_events = [e for e in events if e.decode_step == 0]
+        decode1_events = [e for e in events if e.decode_step == 1]
+        if prefill_events:
+            e = prefill_events[0]
+            print(f"\nSample prefill event:")
+            print(f"  name={e.kernel_name}, duration_ns={e.duration_ns}, "
+                  f"wall_ns={e.wall_ns}, tensor_bytes={e.tensor_bytes}")
+        if decode1_events:
+            e = decode1_events[0]
+            print(f"Sample decode-1 event:")
+            print(f"  name={e.kernel_name}, duration_ns={e.duration_ns}, "
+                  f"wall_ns={e.wall_ns}, tensor_bytes={e.tensor_bytes}")
