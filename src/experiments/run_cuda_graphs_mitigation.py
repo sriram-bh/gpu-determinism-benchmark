@@ -187,27 +187,9 @@ def run_graph_pass(model, tokenizer, device, pre_step_fn=None):
             )
     print(f"    Graph captured successfully!")
 
-    # Replay for each decode step
-    # Reset cache again for clean measurement
-    static_cache_3 = type(static_cache)(
-        config=model.config,
-        batch_size=1,
-        max_cache_len=max_cache_len,
-        device=device,
-        dtype=torch.float32,
-    )
-    cache_position_3 = torch.arange(seq_len, device=device)
-    with torch.no_grad():
-        out_3 = model(
-            input_ids,
-            past_key_values=static_cache_3,
-            cache_position=cache_position_3,
-            use_cache=True,
-        )
-        next_token = torch.argmax(out_3.logits[:, -1, :], dim=-1, keepdim=True)
-    torch.cuda.synchronize()
-
-    token_ids = [next_token.item()]
+    # Pre-allocate buffer for reading graph output without triggering
+    # "overwritten by subsequent run" error
+    next_token_buf = torch.empty_like(next_token)
 
     for decode_step in range(1, DECODE_STEPS + 1):
         cur_pos = seq_len + decode_step - 1
@@ -224,9 +206,10 @@ def run_graph_pass(model, tokenizer, device, pre_step_fn=None):
             torch.cuda.synchronize()
 
         extract_events(step_prof, decode_step, logical_clock_state, all_events)
-        next_token = torch.argmax(
-            static_out.logits[:, -1, :], dim=-1, keepdim=True
+        torch.argmax(
+            static_out.logits[:, -1, :], dim=-1, keepdim=True, out=next_token_buf
         )
+        next_token = next_token_buf.clone()
         token_ids.append(next_token.item())
 
     return all_events, token_ids
