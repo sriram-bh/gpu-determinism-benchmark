@@ -39,7 +39,7 @@ from src.metrics.schema import KernelEvent
 
 
 FIXED_INPUT_SENTENCE = "The quick brown fox jumps over the lazy dog today"  # ~20 tokens
-DECODE_STEPS = 20  # number of additional tokens to generate after prefill
+DECODE_STEPS = 40  # number of additional tokens to generate after prefill
 MODEL_NAME = "gpt2"
 SEED = 42
 
