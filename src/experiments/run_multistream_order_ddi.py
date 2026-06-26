@@ -33,7 +33,7 @@ from src.metrics.schema import KernelEvent, events_to_dicts
 from src.metrics.ddi import align_events, compute_timing_ddi, compute_order_ddi
 
 N_RUNS = 5
-N_STREAMS = 2
+N_STREAMS = 4
 
 
 def run_multistream_pass(model, tokenizer, device):
@@ -45,9 +45,9 @@ def run_multistream_pass(model, tokenizer, device):
     all_events = []
     all_token_ids = [[] for _ in range(N_STREAMS)]
 
-    streams = [torch.cuda.default_stream(device)] + [
-        torch.cuda.Stream(device) for _ in range(N_STREAMS - 1)
-    ]
+    # All non-default streams — the default stream has implicit
+    # synchronization behavior that serializes execution.
+    streams = [torch.cuda.Stream(device) for _ in range(N_STREAMS)]
 
     inputs = tokenizer(FIXED_INPUT_SENTENCE, return_tensors="pt").to(device)
 
@@ -138,6 +138,14 @@ def main():
         runs.append({"events": events, "token_ids": token_ids})
         print(f"  Run {i+1}: {len(events)} global events, "
               f"stream 0 tokens: {tokenizer.decode(token_ids[0][:10])}...")
+
+    # Diagnostic: check if events from run 1 step 0 show true interleaving
+    step0_events = [e for e in runs[0]["events"] if e.decode_step == 0]
+    print(f"\n--- Interleaving diagnostic (run 1, step 0) ---")
+    print(f"  Events in step 0: {len(step0_events)}")
+    print(f"  First 20 kernel names (by start time):")
+    for i, e in enumerate(step0_events[:20]):
+        print(f"    {i:3d}  wall={e.wall_ns:>12d}  {e.kernel_name[:80]}")
 
     # Use run 1 as the reference, compare all others against it
     ref_events = runs[0]["events"]
