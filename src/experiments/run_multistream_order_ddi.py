@@ -124,20 +124,56 @@ def main():
     print(f"Streams: {N_STREAMS} concurrent GPT-2 inferences")
     print(f"Runs: {N_RUNS}")
 
-    _configure_deterministic_mode()
+    # Non-deterministic mode: allow cuBLAS to run concurrently across
+    # streams without workspace serialization. Keep cudnn.benchmark=False
+    # to prevent algorithm autotuning from changing kernel names.
+    torch.manual_seed(SEED)
+    torch.cuda.manual_seed_all(SEED)
+    torch.backends.cudnn.benchmark = False
+    print("Mode: NON-DETERMINISTIC (concurrent cuBLAS enabled)")
+
     model, tokenizer = _load_model(device)
 
     print("\nRunning 3 warmup passes...")
     run_warmup(model, tokenizer, device, n=3)
 
+    # Load G* kernel names for tracking
+    gstar_path = "results/gstar.json"
+    gstar_names = None
+    if os.path.exists(gstar_path):
+        with open(gstar_path) as f:
+            gstar_data = json.load(f)
+        gstar_names = set(e["kernel_name"] for e in gstar_data["gstar_events"])
+        print(f"G* loaded: {len(gstar_names)} kernel names for comparison")
+
     print(f"\nRunning {N_RUNS} multi-stream passes...")
     runs = []
     for i in range(N_RUNS):
-        _configure_deterministic_mode()
+        torch.manual_seed(SEED)
+        torch.cuda.manual_seed_all(SEED)
         events, token_ids = run_multistream_pass(model, tokenizer, device)
         runs.append({"events": events, "token_ids": token_ids})
         print(f"  Run {i+1}: {len(events)} global events, "
               f"stream 0 tokens: {tokenizer.decode(token_ids[0][:10])}...")
+
+    # Kernel name tracking against G*
+    if gstar_names:
+        run1_names = set(e.kernel_name for e in runs[0]["events"])
+        missing = gstar_names - run1_names
+        new = run1_names - gstar_names
+        print(f"\n--- Kernel name diff vs G* ---")
+        print(f"  G* names: {len(gstar_names)}, Run 1 names: {len(run1_names)}")
+        print(f"  In common: {len(gstar_names & run1_names)}")
+        if missing:
+            print(f"  Missing from run 1: {len(missing)}")
+            for n in sorted(missing):
+                print(f"    GONE: {n[:90]}")
+        if new:
+            print(f"  New in run 1: {len(new)}")
+            for n in sorted(new):
+                print(f"    NEW:  {n[:90]}")
+        if not missing and not new:
+            print(f"  IDENTICAL kernel name sets.")
 
     # Diagnostic: check if events from run 1 step 0 show true interleaving
     step0_events = [e for e in runs[0]["events"] if e.decode_step == 0]
