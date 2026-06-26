@@ -38,7 +38,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 from src.metrics.schema import KernelEvent
 
 
-FIXED_INPUT_SENTENCE = "The quick brown fox jumps over the lazy dog today"  # ~20 tokens
+FIXED_INPUT_SENTENCE = "In 1969, the first human walked on the Moon. The astronaut"  # 13 tokens
 DECODE_STEPS = 40  # number of additional tokens to generate after prefill
 MODEL_NAME = "gpt2"
 SEED = 42
