@@ -252,7 +252,33 @@ def main():
         print(f"  Tokens match eager: {graph_base_tok == eager_base_tok}")
         graph_available = True
     except Exception as e:
+        import traceback
         print(f"  CUDA Graph capture failed: {e}")
+        traceback.print_exc()
+
+        # Debug: inspect past_key_values structure
+        print("\n  DEBUG: Inspecting past_key_values structure...")
+        _configure_deterministic_mode()
+        with torch.no_grad():
+            dbg_out = model(
+                tokenizer(FIXED_INPUT_SENTENCE, return_tensors="pt").to(device)["input_ids"],
+                use_cache=True,
+            )
+        pkv = dbg_out.past_key_values
+        print(f"  Type: {type(pkv)}")
+        print(f"  Has key_cache: {hasattr(pkv, 'key_cache')}")
+        if hasattr(pkv, 'key_cache'):
+            print(f"  key_cache length: {len(pkv.key_cache)}")
+            print(f"  key_cache[0] type: {type(pkv.key_cache[0])}, shape: {pkv.key_cache[0].shape if pkv.key_cache[0] is not None else None}")
+        elif hasattr(pkv, '__len__'):
+            print(f"  Length: {len(pkv)}")
+            if len(pkv) > 0:
+                layer0 = pkv[0]
+                print(f"  Layer 0 type: {type(layer0)}, len: {len(layer0) if hasattr(layer0, '__len__') else 'N/A'}")
+                if hasattr(layer0, '__len__'):
+                    for j, t in enumerate(layer0):
+                        print(f"    Element {j}: type={type(t)}, is_none={t is None}, shape={t.shape if hasattr(t, 'shape') else 'N/A'}")
+
         graph_available = False
 
     if graph_available:
