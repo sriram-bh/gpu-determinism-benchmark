@@ -119,10 +119,11 @@ def main():
         "timing_ddi": cont_ddi,
         "matched": len(cont_matched),
         "tokens_match": cont_tokens == base_tokens,
+        "kernel_ddi": cont_kernel_ddi,
     }
 
-    # --- Condition 3: Contention via separate process (MPS handles isolation) ---
-    print("\n=== Condition 3: CONTENTION (separate process via MPS) ===")
+    # --- Condition 3: Cross-process contention (MPS may or may not help) ---
+    print("\n=== Condition 3: CONTENTION (separate process) ===")
     print("  Starting contention process...")
 
     contention_proc = multiprocessing.Process(
@@ -144,35 +145,32 @@ def main():
     mps_kernel_ddi = breakdown_by_axis(mps_matched, "kernel_type", compute_timing_ddi)
     print(f"  Timing DDI: {mps_ddi:.6f}")
 
-    results["mps_cross_process_contention"] = {
+    results["cross_process_contention"] = {
         "timing_ddi": mps_ddi,
         "matched": len(mps_matched),
         "tokens_match": mps_tokens == base_tokens,
+        "kernel_ddi": mps_kernel_ddi,
     }
 
-    # --- Comparison ---
+    # --- Side-by-side per-kernel comparison (ALL kernels, same order) ---
     print("\n" + "=" * 60)
-    print("COMPARISON")
+    print("PER-KERNEL COMPARISON (all kernels, side by side)")
     print("=" * 60)
-    print(f"  Baseline (no contention):           N/A (reference)")
-    print(f"  Same-process contention DDI:        {cont_ddi:.4f}")
-    print(f"  Cross-process contention (MPS) DDI: {mps_ddi:.4f}")
-    if cont_ddi > 0:
-        reduction = 1 - mps_ddi / cont_ddi
-        print(f"  MPS reduction: {reduction:+.0%} ({'BETTER' if reduction > 0 else 'WORSE'})")
+    all_kernel_names = sorted(set(list(cont_kernel_ddi.keys()) + list(mps_kernel_ddi.keys())))
+    print(f"{'Kernel':<55s} {'SameProc':>9s} {'CrossProc':>10s} {'Change':>8s}")
+    print("-" * 85)
+    for name in all_kernel_names:
+        sp = cont_kernel_ddi.get(name, 0)
+        cp = mps_kernel_ddi.get(name, 0)
+        if sp > 0:
+            change = f"{(1 - cp/sp)*100:+.0f}%"
+        else:
+            change = "N/A"
+        short = name[:53]
+        print(f"{short:<55s} {sp:>9.4f} {cp:>10.4f} {change:>8s}")
 
-    print(f"\n  Top 5 jitter kernels (same-process):")
-    for n, d in sorted(cont_kernel_ddi.items(), key=lambda x: -x[1])[:5]:
-        print(f"    DDI={d:.4f}  {n[:65]}")
-    print(f"\n  Top 5 jitter kernels (MPS cross-process):")
-    for n, d in sorted(mps_kernel_ddi.items(), key=lambda x: -x[1])[:5]:
-        print(f"    DDI={d:.4f}  {n[:65]}")
+    print(f"\n{'OVERALL':<55s} {cont_ddi:>9.4f} {mps_ddi:>10.4f} {(1-mps_ddi/cont_ddi)*100:+.0f}%")
 
-    results["comparison"] = {
-        "same_process_ddi": cont_ddi,
-        "mps_cross_process_ddi": mps_ddi,
-        "reduction_pct": 1 - mps_ddi / cont_ddi if cont_ddi > 0 else 0,
-    }
     results["baseline_events"] = events_to_dicts(base_events)
     results["baseline_tokens"] = base_tokens
 
