@@ -78,10 +78,11 @@ def run_contention_capped_60(duration_seconds):
 
 
 def run_contention_low_prio(duration_seconds):
-    """Contention process at low stream priority."""
+    """Contention process at LOWEST stream priority (0 = least priority on Thor)."""
     import torch
     device = torch.device("cuda")
-    stream = torch.cuda.Stream(device, priority=-1)
+    # priority=0 is LOWEST on Thor (range: -3=highest to 0=lowest)
+    stream = torch.cuda.Stream(device, priority=0)
     data = torch.randn(3000000, device=device)
     out = torch.empty_like(data)
     end_time = time.time() + duration_seconds
@@ -92,12 +93,13 @@ def run_contention_low_prio(duration_seconds):
 
 
 def run_contention_prio_capped_20(duration_seconds):
-    """Contention at low priority + 20% SM cap."""
+    """Contention at LOWEST priority + 20% SM cap."""
     import os
     os.environ["CUDA_MPS_ACTIVE_THREAD_PERCENTAGE"] = "20"
     import torch
     device = torch.device("cuda")
-    stream = torch.cuda.Stream(device, priority=-1)
+    # priority=0 is LOWEST on Thor
+    stream = torch.cuda.Stream(device, priority=0)
     data = torch.randn(3000000, device=device)
     out = torch.empty_like(data)
     end_time = time.time() + duration_seconds
