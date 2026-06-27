@@ -77,6 +77,36 @@ def run_contention_capped_60(duration_seconds):
     run_contention_capped(duration_seconds, 60)
 
 
+def run_contention_low_prio(duration_seconds):
+    """Contention process at low stream priority."""
+    import torch
+    device = torch.device("cuda")
+    stream = torch.cuda.Stream(device, priority=-1)
+    data = torch.randn(3000000, device=device)
+    out = torch.empty_like(data)
+    end_time = time.time() + duration_seconds
+    with torch.cuda.stream(stream):
+        while time.time() < end_time:
+            torch.cumsum(data, dim=0, out=out)
+    torch.cuda.synchronize()
+
+
+def run_contention_prio_capped_20(duration_seconds):
+    """Contention at low priority + 20% SM cap."""
+    import os
+    os.environ["CUDA_MPS_ACTIVE_THREAD_PERCENTAGE"] = "20"
+    import torch
+    device = torch.device("cuda")
+    stream = torch.cuda.Stream(device, priority=-1)
+    data = torch.randn(3000000, device=device)
+    out = torch.empty_like(data)
+    end_time = time.time() + duration_seconds
+    with torch.cuda.stream(stream):
+        while time.time() < end_time:
+            torch.cumsum(data, dim=0, out=out)
+    torch.cuda.synchronize()
+
+
 # ── L2 warmth hook ────────────────────────────────────────────────
 
 def make_l2_warmth_hook(model, device):
@@ -220,24 +250,6 @@ def main():
     print("EXPERIMENT 3: STREAM PRIORITY + L2 WARMTH")
     print("=" * 60)
 
-    # For stream priority: contention process uses low priority
-    # (handled inside contention function isn't easy with spawn,
-    # so we just use the default contention + L2 warmth for now,
-    # since priority was tested in the previous sweep)
-    # Actually, we need the contention at low priority. Let's add it.
-
-    def run_contention_low_prio(duration_seconds):
-        import torch
-        device = torch.device("cuda")
-        stream = torch.cuda.Stream(device, priority=-1)
-        data = torch.randn(3000000, device=device)
-        out = torch.empty_like(data)
-        end_time = time.time() + duration_seconds
-        with torch.cuda.stream(stream):
-            while time.time() < end_time:
-                torch.cumsum(data, dim=0, out=out)
-        torch.cuda.synchronize()
-
     r_combo1 = run_with_cross_process(
         "Prio+L2Warm", model, tokenizer, device, base_events,
         contention_fn=run_contention_low_prio,
@@ -257,24 +269,9 @@ def main():
         best_pct = int(best_cap["label"].split("_")[1].rstrip("%"))
         print(f"  Best contention cap: {best_pct}% (DDI={best_cap['timing_ddi']:.4f})")
 
-        # Combine: contention at low priority + capped SM
-        def run_contention_prio_capped(duration_seconds):
-            import os
-            os.environ["CUDA_MPS_ACTIVE_THREAD_PERCENTAGE"] = str(best_pct)
-            import torch
-            device = torch.device("cuda")
-            stream = torch.cuda.Stream(device, priority=-1)
-            data = torch.randn(3000000, device=device)
-            out = torch.empty_like(data)
-            end_time = time.time() + duration_seconds
-            with torch.cuda.stream(stream):
-                while time.time() < end_time:
-                    torch.cumsum(data, dim=0, out=out)
-            torch.cuda.synchronize()
-
         r_combo2 = run_with_cross_process(
-            f"Prio+Cap{best_pct}%", model, tokenizer, device, base_events,
-            contention_fn=run_contention_prio_capped,
+            f"Prio+Cap20%", model, tokenizer, device, base_events,
+            contention_fn=run_contention_prio_capped_20,
         )
         results.append(r_combo2)
 
