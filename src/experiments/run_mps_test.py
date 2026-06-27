@@ -42,6 +42,9 @@ from src.metrics.schema import events_to_dicts
 from src.metrics.ddi import align_events, compute_timing_ddi, breakdown_by_axis
 
 
+multiprocessing.set_start_method("spawn", force=True)
+
+
 def run_contention_process(duration_seconds):
     """Separate process that creates GPU contention via cumsum ops."""
     import torch
