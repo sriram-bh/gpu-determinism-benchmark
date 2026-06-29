@@ -1,0 +1,99 @@
+Device: NVIDIA Thor
+Decode steps: 40
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 13140.22it/s]
+
+Running 3 warmup passes...
+
+=== Condition 1: EAGER BASELINE ===
+
+  [Eager baseline]
+  Total events: 13530
+  Distinct kernel names: 23
+  Events per step (avg): 330
+  Top 10 kernels:
+     3731x  void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<f
+     1517x  void at::native::vectorized_elementwise_kernel<4, at::native::CUDAFunctor_a
+     1476x  void at::native::vectorized_elementwise_kernel<4, at::native::AUnaryFunctor
+     1025x  void at::native::(anonymous namespace)::vectorized_layer_norm_kernel<float,
+      960x  cutlass3x_sm100_tensorop_s128x64x8tf32gemm_f32_f32_f32_f32_f32_128x64x32_0_
+      960x  void at::native::(anonymous namespace)::CatArrayBatchedCopy_alignedK_contig
+      492x  fmha_cutlassF_f32_aligned_64x64_rf_sm80(PyTorchMemEffAttention::AttentionKe
+      492x  void at::native::vectorized_elementwise_kernel<4, at::native::(anonymous na
+      492x  void at::native::vectorized_elementwise_kernel<4, at::native::tanh_kernel_c
+      492x  void at::native::vectorized_elementwise_kernel<4, at::native::CUDAFunctorOn
+
+=== Condition 2: EAGER + CONTENTION ===
+
+  [Eager contended]
+  Total events: 62773
+  Distinct kernel names: 27
+  Events per step (avg): 1531
+  Top 10 kernels:
+    24600x  void at::cuda::cub::calc_block_sums<512, 16, false, float, float>(float con
+    24600x  void at::cuda::cub::final_scan_kernel<512, 16, float>(float const*, float*,
+     3731x  void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<f
+     1517x  void at::native::vectorized_elementwise_kernel<4, at::native::CUDAFunctor_a
+     1476x  void at::native::vectorized_elementwise_kernel<4, at::native::AUnaryFunctor
+     1025x  void at::native::(anonymous namespace)::vectorized_layer_norm_kernel<float,
+      960x  cutlass3x_sm100_tensorop_s128x64x8tf32gemm_f32_f32_f32_f32_f32_128x64x32_0_
+      960x  void at::native::(anonymous namespace)::CatArrayBatchedCopy_alignedK_contig
+      492x  fmha_cutlassF_f32_aligned_64x64_rf_sm80(PyTorchMemEffAttention::AttentionKe
+      492x  void at::native::vectorized_elementwise_kernel<4, at::native::(anonymous na
+  [align_events] WARNING: 49243 observed kernels had no match in G* (GPU dispatched something unexpected).
+  Timing DDI: 2.673067
+
+=== Condition 3: CUDA GRAPH + STATIC CACHE BASELINE ===
+    StaticCache class: <class 'transformers.cache_utils.StaticCache'>
+    StaticCache.__init__ params: ['self', 'config', 'max_cache_len', 'offloading', 'offload_only_non_sliding', 'kwargs']
+    StaticCache created: type=<class 'transformers.cache_utils.StaticCache'>
+    Prefill done. cache type after: <class 'transformers.cache_utils.StaticCache'>
+    outputs.past_key_values type: <class 'transformers.cache_utils.StaticCache'>
+    Decode warmup...
+    Warmup done. cache type: <class 'transformers.cache_utils.StaticCache'>
+    warmup past_kv type: <class 'transformers.cache_utils.StaticCache'>
+    Capturing CUDA graph...
+    Graph captured successfully!
+[beefy2:154  :0:154] Caught signal 11 (Segmentation fault: invalid permissions for mapped object at address 0x2046055e4)
+==== backtrace (tid:    154) ====
+ 0  /opt/hpcx/ucx/lib/libucs.so.0(ucs_handle_error+0x2cc) [0xffff3740278c]
+ 1  /opt/hpcx/ucx/lib/libucs.so.0(+0x3293c) [0xffff3740293c]
+ 2  /opt/hpcx/ucx/lib/libucs.so.0(+0x32c68) [0xffff37402c68]
+ 3  linux-vdso.so.1(__kernel_rt_sigreturn+0) [0xffffa0e107a8]
+ 4  /usr/lib/aarch64-linux-gnu/nvidia/libcuda.so.1(+0x1732ec) [0xfffeeda932ec]
+ 5  /usr/lib/aarch64-linux-gnu/nvidia/libcuda.so.1(+0x40dadc) [0xfffeedd2dadc]
+ 6  /usr/local/cuda/lib64/libcupti.so.13(+0x84e18) [0xffff6e374e18]
+ 7  /usr/local/cuda/lib64/libcupti.so.13(+0x77b58) [0xffff6e367b58]
+ 8  /usr/local/cuda/lib64/libcupti.so.13(+0x78b48) [0xffff6e368b48]
+ 9  /usr/local/cuda/lib64/libcupti.so.13(+0x72494) [0xffff6e362494]
+10  /usr/local/cuda/lib64/libcupti.so.13(+0x725e4) [0xffff6e3625e4]
+11  /usr/local/cuda/lib64/libcupti.so.13(+0x8de9c) [0xffff6e37de9c]
+12  /usr/local/cuda/lib64/libcupti.so.13(+0xfed64) [0xffff6e3eed64]
+13  /usr/local/cuda/lib64/libcupti.so.13(+0xf3388) [0xffff6e3e3388]
+14  /usr/local/cuda/lib64/libcupti.so.13(+0xf0d10) [0xffff6e3e0d10]
+15  /usr/local/cuda/lib64/libcupti.so.13(+0xf0f1c) [0xffff6e3e0f1c]
+16  /usr/lib/aarch64-linux-gnu/nvidia/libcuda.so.1(+0x1d9188) [0xfffeedaf9188]
+17  /usr/lib/aarch64-linux-gnu/nvidia/libcuda.so.1(+0x24aa44) [0xfffeedb6aa44]
+18  /usr/lib/aarch64-linux-gnu/nvidia/libcuda.so.1(+0x267e1c) [0xfffeedb87e1c]
+19  /usr/lib/aarch64-linux-gnu/nvidia/libcuda.so.1(+0x3567f0) [0xfffeedc767f0]
+20  /usr/lib/aarch64-linux-gnu/nvidia/libcuda.so.1(cuGraphLaunch+0x30) [0xfffeedc5e954]
+21  /usr/local/cuda/targets/sbsa-linux/lib/libcudart.so.13(+0x23ffc) [0xffffa0043ffc]
+22  /usr/local/cuda/targets/sbsa-linux/lib/libcudart.so.13(cudaGraphLaunch+0x11c) [0xffffa008e954]
+23  /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cuda.so(_ZN2at4cuda9CUDAGraph6replayEv+0x150) [0xffff6fb6a940]
+24  /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_python.so(+0xf235c8) [0xffff9f4a35c8]
+25  /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_python.so(+0xf246c8) [0xffff9f4a46c8]
+26  /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_python.so(+0x599040) [0xffff9eb19040]
+27  python3() [0x503574]
+28  python3(_PyObject_MakeTpCall+0x78) [0x4c2e68]
+29  python3(_PyEval_EvalFrameDefault+0x8a0) [0x563004]
+30  python3(PyEval_EvalCode+0x130) [0x561354]
+31  python3() [0x59a4b4]
+32  python3() [0x680e64]
+33  python3(_PyRun_SimpleFileObject+0x194) [0x680a38]
+34  python3(_PyRun_AnyFileObject+0x54) [0x680804]
+35  python3(Py_RunMain+0x2dc) [0x68b7fc]
+36  python3(Py_BytesMain+0x28) [0x68b3b8]
+37  /lib/aarch64-linux-gnu/libc.so.6(+0x284c4) [0xffffa0b084c4]
+38  /lib/aarch64-linux-gnu/libc.so.6(__libc_start_main+0x98) [0xffffa0b08598]
+39  python3(_start+0x30) [0x5f52f0]
+=================================

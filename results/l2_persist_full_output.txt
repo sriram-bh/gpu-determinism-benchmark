@@ -1,0 +1,125 @@
+=== L2 Persistence Test ===
+--- Locking GPU clocks ---
+Persistence mode is already Enabled for GPU 00000000:01:00.0.
+All done.
+gpu-gpc-0 MinFreq=1386000000 MaxFreq=1386000000 CurrentFreq=1386000000
+gpu-nvd-0 MinFreq=1557000000 MaxFreq=1557000000 CurrentFreq=1557000000
+--- Starting MPS daemon ---
+MPS running.
+
+=============
+== PyTorch ==
+=============
+
+NVIDIA Release 25.08 (build 197421315)
+PyTorch Version 2.8.0a0+34c6371
+Container image Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+Copyright (c) 2014-2024 Facebook Inc.
+Copyright (c) 2011-2014 Idiap Research Institute (Ronan Collobert)
+Copyright (c) 2012-2014 Deepmind Technologies    (Koray Kavukcuoglu)
+Copyright (c) 2011-2012 NEC Laboratories America (Koray Kavukcuoglu)
+Copyright (c) 2011-2013 NYU                      (Clement Farabet)
+Copyright (c) 2006-2010 NEC Laboratories America (Ronan Collobert, Leon Bottou, Iain Melvin, Jason Weston)
+Copyright (c) 2006      Idiap Research Institute (Samy Bengio)
+Copyright (c) 2001-2004 Idiap Research Institute (Ronan Collobert, Samy Bengio, Johnny Mariethoz)
+Copyright (c) 2015      Google Inc.
+Copyright (c) 2015      Yangqing Jia
+Copyright (c) 2013-2016 The Caffe contributors
+All rights reserved.
+
+Various files include modifications (c) NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+
+GOVERNING TERMS: The software and materials are governed by the NVIDIA Software License Agreement
+(found at https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-software-license-agreement/)
+and the Product-Specific Terms for NVIDIA AI Products
+(found at https://www.nvidia.com/en-us/agreements/enterprise-software/product-specific-terms-for-ai-products/).
+
+NOTE: The SHMEM allocation limit is set to the default of 64MB.  This may be
+   insufficient for PyTorch.  NVIDIA recommends the use of the following flags:
+   docker run --gpus all --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 ...
+
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+Device: NVIDIA Thor
+L2 cache: 32 MB
+MPS active: True
+Default persisting L2: 6.0 MB
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 14374.37it/s]
+
+Running 3 warmup passes...
+
+=== BASELINE (no contention) ===
+  Events: 13530
+
+=== NoL2Pin ===
+  Starting contention process...
+  Events: 13530, Matched: 13530
+  Timing DDI: 0.369563
+
+--- Setting up L2 persistence (8MB) ---
+  Persisting L2 size: 8 MB (requested 8 MB)
+  Pinning 0 tensors (0.0 MB) in L2
+
+=== L2Pin_8MB ===
+  Starting contention process...
+  Events: 13530, Matched: 13530
+  Timing DDI: 0.486320
+
+--- Setting up L2 persistence (16MB) ---
+  Persisting L2 size: 16 MB (requested 16 MB)
+  Pinning 0 tensors (0.0 MB) in L2
+
+=== L2Pin_16MB ===
+  Starting contention process...
+  Events: 13530, Matched: 13530
+  Timing DDI: 0.473342
+
+--- L2 persistence without contention (control) ---
+  Persisting L2 size: 16 MB (requested 16 MB)
+  Pinning 0 tensors (0.0 MB) in L2
+
+=== L2Pin_NoCont ===
+  Events: 13530, Matched: 13530
+  Timing DDI: 0.071152
+
+============================================================
+RESULTS SUMMARY
+============================================================
+
+Condition                 DDI   vs NoL2Pin
+------------------------------------------
+NoL2Pin                0.3696    (baseline)
+L2Pin_8MB              0.4863         -32% worse
+L2Pin_16MB             0.4733         -28% worse
+L2Pin_NoCont           0.0712         +81% better
+
+Kernel                                                  NoL2Pin    L2Pin_8MB   L2Pin_16MB L2Pin_NoCont
+------------------------------------------------------------------------------------------------------
+Memcpy DtoH (Device -> Pinned)                           1.0064       0.8348       1.0987       0.4692
+cutlass3x_sm100_tensorop_s128x64x8tf32gemm_f32_f         0.3690       0.3773       0.4029       0.0234
+fmha_cutlassF_f32_aligned_64x64_rf_sm80(PyTorchM         0.5778       1.2350       1.0333       0.0309
+std::enable_if<!(false), void>::type internal::g         0.3035       0.3432       0.3093       0.0268
+std::enable_if<true, void>::type internal::gemvx         0.4734       0.4707       0.5059       0.0253
+void (anonymous namespace)::elementwise_kernel_w         0.1939       0.4855       0.2432       0.0191
+void at::native::(anonymous namespace)::CatArray         0.0367       0.0945       0.0327       0.0472
+void at::native::(anonymous namespace)::CatArray         0.4628       0.5287       0.5782       0.1018
+void at::native::(anonymous namespace)::indexSel         0.2318       0.3260       0.3605       0.0444
+void at::native::(anonymous namespace)::vectoriz         0.3417       0.4369       0.3588       0.0468
+void at::native::reduce_kernel<512, 1, at::nativ         0.6067       0.5662       0.4939       0.0241
+void at::native::vectorized_elementwise_kernel<2         0.3020       0.5426       0.3589       0.0300
+void at::native::vectorized_elementwise_kernel<2         0.3056       0.5643       0.4855       0.0184
+void at::native::vectorized_elementwise_kernel<4         0.1789       0.1996       0.1787       0.0825
+void at::native::vectorized_elementwise_kernel<4         0.3838       0.5514       0.6327       0.1027
+void at::native::vectorized_elementwise_kernel<4         0.3131       0.3490       0.3426       0.0663
+void at::native::vectorized_elementwise_kernel<4         0.4265       0.5064       0.4648       0.1369
+void at::native::vectorized_elementwise_kernel<4         0.5715       0.6995       0.6515       0.0918
+void at::native::vectorized_elementwise_kernel<4         0.2786       0.3981       0.3925       0.0532
+void at::native::vectorized_elementwise_kernel<4         0.2642       0.4089       0.3171       0.1879
+void gemmSN_NN_kernel<float, 128, 2, 4, 8, 7, 4,         0.0370       0.0693       0.0261       0.0456
+void gemmSN_TN_kernel<float, 128, 16, 2, 4, 14,          0.0087       0.0077       0.0083       0.0022
+void gemv2T_kernel_val<int, int, float, float, f         0.1552       0.1348       0.1429       0.0252
+OVERALL                                                  0.3696       0.4863       0.4733       0.0712
+
+Results saved to results/l2_persistence_test.json
+DONE.
+DONE.

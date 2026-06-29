@@ -1,0 +1,147 @@
+=== Targeted Mitigation Sweep ===
+--- Locking GPU clocks ---
+Persistence mode is already Enabled for GPU 00000000:01:00.0.
+All done.
+gpu-gpc-0 MinFreq=1386000000 MaxFreq=1386000000 CurrentFreq=1386000000
+gpu-nvd-0 MinFreq=1557000000 MaxFreq=1557000000 CurrentFreq=1557000000
+
+--- Starting MPS daemon ---
+MPS running.
+
+=============
+== PyTorch ==
+=============
+
+NVIDIA Release 25.08 (build 197421315)
+PyTorch Version 2.8.0a0+34c6371
+Container image Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+Copyright (c) 2014-2024 Facebook Inc.
+Copyright (c) 2011-2014 Idiap Research Institute (Ronan Collobert)
+Copyright (c) 2012-2014 Deepmind Technologies    (Koray Kavukcuoglu)
+Copyright (c) 2011-2012 NEC Laboratories America (Koray Kavukcuoglu)
+Copyright (c) 2011-2013 NYU                      (Clement Farabet)
+Copyright (c) 2006-2010 NEC Laboratories America (Ronan Collobert, Leon Bottou, Iain Melvin, Jason Weston)
+Copyright (c) 2006      Idiap Research Institute (Samy Bengio)
+Copyright (c) 2001-2004 Idiap Research Institute (Ronan Collobert, Samy Bengio, Johnny Mariethoz)
+Copyright (c) 2015      Google Inc.
+Copyright (c) 2015      Yangqing Jia
+Copyright (c) 2013-2016 The Caffe contributors
+All rights reserved.
+
+Various files include modifications (c) NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+
+GOVERNING TERMS: The software and materials are governed by the NVIDIA Software License Agreement
+(found at https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-software-license-agreement/)
+and the Product-Specific Terms for NVIDIA AI Products
+(found at https://www.nvidia.com/en-us/agreements/enterprise-software/product-specific-terms-for-ai-products/).
+
+NOTE: The SHMEM allocation limit is set to the default of 64MB.  This may be
+   insufficient for PyTorch.  NVIDIA recommends the use of the following flags:
+   docker run --gpus all --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 ...
+
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+Device: NVIDIA Thor
+MPS active: True
+Decode steps: 40
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 11377.09it/s]
+
+Running 3 warmup passes...
+
+=== BASELINE (no contention) ===
+  Events: 13530
+
+=== NoMitigation ===
+  Events: 13530, Matched: 13530
+  Timing DDI: 0.432431
+
+============================================================
+EXPERIMENT 1: CAP CONTENTION PROCESS SM USAGE
+============================================================
+
+=== ContCap_20% ===
+  Events: 13530, Matched: 13530
+  Timing DDI: 0.456078
+
+=== ContCap_40% ===
+  Events: 13530, Matched: 13530
+  Timing DDI: 0.549761
+
+=== ContCap_60% ===
+  Events: 13530, Matched: 13530
+  Timing DDI: 0.479998
+
+============================================================
+EXPERIMENT 2: L2 WARMTH UNDER CONTENTION
+============================================================
+
+=== L2Warm ===
+  [align_events] WARNING: 8160 observed kernels had no match in G* (GPU dispatched something unexpected).
+  Events: 21690, Matched: 13530
+  Timing DDI: 0.554450
+
+============================================================
+EXPERIMENT 3: STREAM PRIORITY + L2 WARMTH
+============================================================
+
+=== Prio+L2Warm ===
+  [align_events] WARNING: 8159 observed kernels had no match in G* (GPU dispatched something unexpected).
+  Events: 21689, Matched: 13530
+  Timing DDI: 0.535061
+
+============================================================
+EXPERIMENT 4: STREAM PRIORITY + CONTENTION SM CAP
+============================================================
+  Best contention cap: 20% (DDI=0.4561)
+
+=== Prio+Cap20% ===
+  Events: 13530, Matched: 13530
+  Timing DDI: 0.426151
+
+============================================================
+FULL RESULTS SUMMARY
+============================================================
+
+Condition                 DDI  vs Baseline
+------------------------------------------
+NoMitigation           0.4324          +0% worse
+ContCap_20%            0.4561          -5% worse
+ContCap_40%            0.5498         -27% worse
+ContCap_60%            0.4800         -11% worse
+L2Warm                 0.5544         -28% worse
+Prio+L2Warm            0.5351         -24% worse
+Prio+Cap20%            0.4262          +1% better
+
+--- Per-kernel breakdown ---
+Kernel                                               NoMitigation    ContCap_20%    ContCap_40%    ContCap_60%         L2Warm    Prio+L2Warm    Prio+Cap20%
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
+Memcpy DtoH (Device -> Pinned)                             0.9544         1.0480         0.4059         0.3984         0.8541         1.0610         1.5942
+cutlass3x_sm100_tensorop_s128x64x8tf32gemm_f32_f           0.3350         0.3682         0.3927         0.3378         0.4141         0.4088         0.3628
+fmha_cutlassF_f32_aligned_64x64_rf_sm80(PyTorchM           0.7314         0.7498         1.0837         0.9125         1.0154         0.5424         1.0467
+std::enable_if<!(false), void>::type internal::g           0.2910         0.2446         0.2837         0.2918         0.2675         0.2933         0.2409
+std::enable_if<true, void>::type internal::gemvx           0.4330         0.3995         0.5475         0.4179         0.5422         0.4681         0.3656
+void (anonymous namespace)::elementwise_kernel_w           0.4596         0.3875         0.3575         0.5332         0.4848         0.4801         0.4601
+void at::native::(anonymous namespace)::CatArray           0.3212         0.1385         0.0694         0.0121         0.0891         0.3612         0.0087
+void at::native::(anonymous namespace)::CatArray           0.5447         0.5074         0.6149         0.5461         0.6050         0.7353         0.6427
+void at::native::(anonymous namespace)::indexSel           0.2700         0.3317         0.2993         0.3041         0.4716         0.5873         0.5126
+void at::native::(anonymous namespace)::vectoriz           0.3498         0.2558         0.3397         0.3323         0.3269         0.3713         0.2241
+void at::native::reduce_kernel<512, 1, at::nativ           0.4553         0.5384         0.5961         0.5457         0.5722         0.5162         0.4322
+void at::native::vectorized_elementwise_kernel<2           0.3260         0.5136         0.4049         0.4549         0.4346         0.4494         0.4917
+void at::native::vectorized_elementwise_kernel<2           0.4008         0.5049         0.3249         0.4465         0.4791         0.4833         0.3872
+void at::native::vectorized_elementwise_kernel<4           0.1675         0.1791         0.2296         0.2650         0.2664         0.2144         0.1777
+void at::native::vectorized_elementwise_kernel<4           0.5490         0.5549         1.0579         0.5289         0.8150         0.9010         0.4444
+void at::native::vectorized_elementwise_kernel<4           0.3222         0.3744         0.4609         0.3542         0.3921         0.2634         0.3059
+void at::native::vectorized_elementwise_kernel<4           0.4642         0.4437         0.5411         0.5391         0.5375         0.6137         0.4841
+void at::native::vectorized_elementwise_kernel<4           0.6843         0.7793         0.7593         0.7445         0.8221         0.8193         0.6505
+void at::native::vectorized_elementwise_kernel<4           0.3508         0.4192         0.4299         0.4487         0.5056         0.4525         0.3466
+void at::native::vectorized_elementwise_kernel<4           0.3137         0.3124         0.2703         0.4380         0.3909         0.2525         0.3064
+void gemmSN_NN_kernel<float, 128, 2, 4, 8, 7, 4,           0.0479         0.0327         0.0688         0.0174         0.0228         0.0245         0.0183
+void gemmSN_TN_kernel<float, 128, 16, 2, 4, 14,            0.0140         0.0079         0.0128         0.0079         0.0080         0.0415         0.0074
+void gemv2T_kernel_val<int, int, float, float, f           0.1126         0.1178         0.1517         0.1053         0.1329         0.1305         0.1218
+OVERALL                                                    0.4324         0.4561         0.5498         0.4800         0.5544         0.5351         0.4262
+
+Results saved to results/targeted_mitigations.json
+DONE.
+
+--- Stopping MPS ---
+DONE.

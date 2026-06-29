@@ -1,0 +1,219 @@
+=== MPS Mitigation Experiment ===
+
+==========================================
+  RUN 1: WITHOUT MPS (cross-process baseline)
+==========================================
+
+=============
+== PyTorch ==
+=============
+
+NVIDIA Release 25.08 (build 197421315)
+PyTorch Version 2.8.0a0+34c6371
+Container image Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+Copyright (c) 2014-2024 Facebook Inc.
+Copyright (c) 2011-2014 Idiap Research Institute (Ronan Collobert)
+Copyright (c) 2012-2014 Deepmind Technologies    (Koray Kavukcuoglu)
+Copyright (c) 2011-2012 NEC Laboratories America (Koray Kavukcuoglu)
+Copyright (c) 2011-2013 NYU                      (Clement Farabet)
+Copyright (c) 2006-2010 NEC Laboratories America (Ronan Collobert, Leon Bottou, Iain Melvin, Jason Weston)
+Copyright (c) 2006      Idiap Research Institute (Samy Bengio)
+Copyright (c) 2001-2004 Idiap Research Institute (Ronan Collobert, Samy Bengio, Johnny Mariethoz)
+Copyright (c) 2015      Google Inc.
+Copyright (c) 2015      Yangqing Jia
+Copyright (c) 2013-2016 The Caffe contributors
+All rights reserved.
+
+Various files include modifications (c) NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+
+GOVERNING TERMS: The software and materials are governed by the NVIDIA Software License Agreement
+(found at https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-software-license-agreement/)
+and the Product-Specific Terms for NVIDIA AI Products
+(found at https://www.nvidia.com/en-us/agreements/enterprise-software/product-specific-terms-for-ai-products/).
+
+NOTE: The SHMEM allocation limit is set to the default of 64MB.  This may be
+   insufficient for PyTorch.  NVIDIA recommends the use of the following flags:
+   docker run --gpus all --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 ...
+
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+--- MPS OFF ---
+Device: NVIDIA Thor
+Decode steps: 40
+CUDA_MPS_PIPE_DIRECTORY: 
+MPS active: False
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 15438.26it/s]
+
+Running 3 warmup passes...
+
+=== Condition 1: BASELINE (no contention) ===
+
+  [Baseline]
+  Total events: 13530
+  Distinct kernel names: 23
+  Events per step (avg): 330
+
+=== Condition 2: CONTENTION (same process, pre_step_fn) ===
+
+  [Contended (same process)]
+  Total events: 62773
+  Distinct kernel names: 27
+  Events per step (avg): 1531
+  Tokens match baseline: True
+  [align_events] WARNING: 49243 observed kernels had no match in G* (GPU dispatched something unexpected).
+  Timing DDI: 2.739395
+
+=== Condition 3: CONTENTION (separate process) ===
+  Starting contention process...
+
+  [Contended (separate process, MPS)]
+  Total events: 13530
+  Distinct kernel names: 23
+  Events per step (avg): 330
+  Tokens match baseline: True
+  Timing DDI: 0.113938
+
+============================================================
+PER-KERNEL COMPARISON (all kernels, side by side)
+============================================================
+Kernel                                                   SameProc  CrossProc   Change
+-------------------------------------------------------------------------------------
+Memcpy DtoH (Device -> Pinned)                             1.0189     0.2685     +74%
+cutlass3x_sm100_tensorop_s128x64x8tf32gemm_f32_f32_f3      1.3324     0.1608     +88%
+fmha_cutlassF_f32_aligned_64x64_rf_sm80(PyTorchMemEff      2.7636     0.0331     +99%
+std::enable_if<!(false), void>::type internal::gemvx:      1.8724     0.1350     +93%
+std::enable_if<true, void>::type internal::gemvx::ker      2.4860     0.2508     +90%
+void (anonymous namespace)::elementwise_kernel_with_i      6.1516     0.0433     +99%
+void at::native::(anonymous namespace)::CatArrayBatch      3.6692     0.0268     +99%
+void at::native::(anonymous namespace)::CatArrayBatch      6.3151     0.1487     +98%
+void at::native::(anonymous namespace)::indexSelectSm      4.8391     0.0915     +98%
+void at::native::(anonymous namespace)::vectorized_la      2.5419     0.0633     +98%
+void at::native::reduce_kernel<512, 1, at::native::Re      1.1287     0.0418     +96%
+void at::native::vectorized_elementwise_kernel<2, at:      3.9390     0.0325     +99%
+void at::native::vectorized_elementwise_kernel<2, at:      5.8132     0.0190    +100%
+void at::native::vectorized_elementwise_kernel<4, at:      2.6698     0.1717     +94%
+void at::native::vectorized_elementwise_kernel<4, at:      2.5708     0.1678     +93%
+void at::native::vectorized_elementwise_kernel<4, at:      2.2108     0.1600     +93%
+void at::native::vectorized_elementwise_kernel<4, at:      2.6337     0.1549     +94%
+void at::native::vectorized_elementwise_kernel<4, at:      2.4821     0.1238     +95%
+void at::native::vectorized_elementwise_kernel<4, at:      2.5521     0.0566     +98%
+void at::native::vectorized_elementwise_kernel<4, at:      2.7173     0.1252     +95%
+void gemmSN_NN_kernel<float, 128, 2, 4, 8, 7, 4, true      1.5888     0.0512     +97%
+void gemmSN_TN_kernel<float, 128, 16, 2, 4, 14, 15, f      0.0757     0.0097     +87%
+void gemv2T_kernel_val<int, int, float, float, float,      0.2443     0.0543     +78%
+
+OVERALL                                                    2.7394     0.1139 +96%
+
+Results saved to results/mps_mitigation.json
+DONE.
+
+==========================================
+  RUN 2: WITH MPS
+==========================================
+Starting MPS daemon...
+
+=============
+== PyTorch ==
+=============
+
+NVIDIA Release 25.08 (build 197421315)
+PyTorch Version 2.8.0a0+34c6371
+Container image Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+Copyright (c) 2014-2024 Facebook Inc.
+Copyright (c) 2011-2014 Idiap Research Institute (Ronan Collobert)
+Copyright (c) 2012-2014 Deepmind Technologies    (Koray Kavukcuoglu)
+Copyright (c) 2011-2012 NEC Laboratories America (Koray Kavukcuoglu)
+Copyright (c) 2011-2013 NYU                      (Clement Farabet)
+Copyright (c) 2006-2010 NEC Laboratories America (Ronan Collobert, Leon Bottou, Iain Melvin, Jason Weston)
+Copyright (c) 2006      Idiap Research Institute (Samy Bengio)
+Copyright (c) 2001-2004 Idiap Research Institute (Ronan Collobert, Samy Bengio, Johnny Mariethoz)
+Copyright (c) 2015      Google Inc.
+Copyright (c) 2015      Yangqing Jia
+Copyright (c) 2013-2016 The Caffe contributors
+All rights reserved.
+
+Various files include modifications (c) NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+
+GOVERNING TERMS: The software and materials are governed by the NVIDIA Software License Agreement
+(found at https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-software-license-agreement/)
+and the Product-Specific Terms for NVIDIA AI Products
+(found at https://www.nvidia.com/en-us/agreements/enterprise-software/product-specific-terms-for-ai-products/).
+
+NOTE: The SHMEM allocation limit is set to the default of 64MB.  This may be
+   insufficient for PyTorch.  NVIDIA recommends the use of the following flags:
+   docker run --gpus all --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 ...
+
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+--- MPS ON ---
+Device: NVIDIA Thor
+Decode steps: 40
+CUDA_MPS_PIPE_DIRECTORY: /tmp/nvidia-mps
+MPS active: True
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 15254.64it/s]
+
+Running 3 warmup passes...
+
+=== Condition 1: BASELINE (no contention) ===
+
+  [Baseline]
+  Total events: 13530
+  Distinct kernel names: 23
+  Events per step (avg): 330
+
+=== Condition 2: CONTENTION (same process, pre_step_fn) ===
+
+  [Contended (same process)]
+  Total events: 62773
+  Distinct kernel names: 27
+  Events per step (avg): 1531
+  Tokens match baseline: True
+  [align_events] WARNING: 49243 observed kernels had no match in G* (GPU dispatched something unexpected).
+  Timing DDI: 0.096494
+
+=== Condition 3: CONTENTION (separate process) ===
+  Starting contention process...
+
+  [Contended (separate process, MPS)]
+  Total events: 13530
+  Distinct kernel names: 23
+  Events per step (avg): 330
+  Tokens match baseline: True
+  Timing DDI: 0.403984
+
+============================================================
+PER-KERNEL COMPARISON (all kernels, side by side)
+============================================================
+Kernel                                                   SameProc  CrossProc   Change
+-------------------------------------------------------------------------------------
+Memcpy DtoH (Device -> Pinned)                             0.4554     0.7952     -75%
+cutlass3x_sm100_tensorop_s128x64x8tf32gemm_f32_f32_f3      0.0405     0.2824    -597%
+fmha_cutlassF_f32_aligned_64x64_rf_sm80(PyTorchMemEff      0.0251     0.8881   -3438%
+std::enable_if<!(false), void>::type internal::gemvx:      0.0674     0.2391    -255%
+std::enable_if<true, void>::type internal::gemvx::ker      0.1019     0.3210    -215%
+void (anonymous namespace)::elementwise_kernel_with_i      1.1727     0.3015     +74%
+void at::native::(anonymous namespace)::CatArrayBatch      0.0092     0.0092      +0%
+void at::native::(anonymous namespace)::CatArrayBatch      0.0672     0.4440    -560%
+void at::native::(anonymous namespace)::indexSelectSm      0.9220     0.3230     +65%
+void at::native::(anonymous namespace)::vectorized_la      0.0962     0.3359    -249%
+void at::native::reduce_kernel<512, 1, at::native::Re      0.0218     0.4263   -1857%
+void at::native::vectorized_elementwise_kernel<2, at:      0.5400     0.2488     +54%
+void at::native::vectorized_elementwise_kernel<2, at:      0.8693     0.3454     +60%
+void at::native::vectorized_elementwise_kernel<4, at:      0.0949     0.1643     -73%
+void at::native::vectorized_elementwise_kernel<4, at:      0.1057     0.4604    -336%
+void at::native::vectorized_elementwise_kernel<4, at:      0.1281     0.2556    -100%
+void at::native::vectorized_elementwise_kernel<4, at:      0.1408     0.4092    -191%
+void at::native::vectorized_elementwise_kernel<4, at:      0.0684     0.6076    -788%
+void at::native::vectorized_elementwise_kernel<4, at:      0.0776     0.3849    -396%
+void at::native::vectorized_elementwise_kernel<4, at:      0.0846     0.2853    -237%
+void gemmSN_NN_kernel<float, 128, 2, 4, 8, 7, 4, true      0.0284     0.0215     +24%
+void gemmSN_TN_kernel<float, 128, 16, 2, 4, 14, 15, f      0.0010     0.0099    -925%
+void gemv2T_kernel_val<int, int, float, float, float,      0.0450     0.1026    -128%
+
+OVERALL                                                    0.0965     0.4040 -319%
+
+Results saved to results/mps_mitigation.json
+DONE.
+
+--- Stopping MPS daemon ---
+Done. Results in /home/sriram-bh/gpu-determinism-benchmark/results/mps_output_OFF.txt and mps_output_ON.txt

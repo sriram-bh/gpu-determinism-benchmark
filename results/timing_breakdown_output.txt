@@ -1,0 +1,188 @@
+Device: NVIDIA Thor
+Decode steps: 40
+Seed: 42
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 5856.42it/s]
+
+Running 3 warmup passes...
+
+=== Config A (baseline) ===
+  Events: 13530
+  Sample kernel durations (first 5):
+    void at::native::vectorized_elementwise_kernel<4, at::native      1727 ns  flops=0
+    void at::native::vectorized_elementwise_kernel<4, at::native      1471 ns  flops=0
+    void at::native::(anonymous namespace)::indexSelectSmallInde     17440 ns  flops=0
+    void at::native::vectorized_elementwise_kernel<2, at::native      1152 ns  flops=0
+    void at::native::vectorized_elementwise_kernel<2, at::native      1119 ns  flops=0
+
+=== Config B-2streams (heavy contention) ===
+  Events: 62773
+  Tokens match A: True
+
+=== Timing DDI (Config B vs Config A) ===
+  [align_events] WARNING: 49243 observed kernels had no match in G* (GPU dispatched something unexpected).
+  Matched pairs: 13530
+  Overall Timing DDI: 3.208646
+  Overall Order DDI:  0.000000
+
+  TIMING DDI by decode_step:
+                                                         prefill: 4.536296
+                                                               1: 3.857301
+                                                               2: 4.577329
+                                                               3: 4.038105
+                                                               4: 3.929189
+                                                               5: 4.190769
+                                                               6: 3.629974
+                                                               7: 3.610138
+                                                               8: 4.102491
+                                                               9: 3.264054
+                                                              10: 3.001390
+                                                              11: 3.408650
+                                                              12: 3.910157
+                                                              13: 2.983233
+                                                              14: 3.205529
+                                                              15: 2.498029
+                                                              16: 2.402601
+                                                              17: 2.657808
+                                                              18: 2.124787
+                                                              19: 2.327217
+                                                              20: 2.017712
+                                                              21: 2.008147
+                                                              22: 1.987659
+                                                              23: 1.624328
+                                                              24: 1.590407
+                                                              25: 4.505350
+                                                              26: 4.527112
+                                                              27: 4.430741
+                                                              28: 3.545623
+                                                              29: 3.901852
+                                                              30: 3.717392
+                                                              31: 3.625600
+                                                              32: 3.313924
+                                                              33: 2.902753
+                                                              34: 3.097717
+                                                              35: 2.829250
+                                                              36: 2.859739
+                                                              37: 3.033095
+                                                              38: 2.545160
+                                                              39: 2.549423
+                                                              40: 2.686444
+
+  TIMING DDI by kernel_type:
+    void at::native::(anonymous namespace)::CatArrayBatchedCopy_alignedK_contig<at::native::(anonymous namespace)::OpaqueType<4u>, unsigned int, 4, 128, 1, 16>(at::native::(anonymous namespace)::OpaqueType<4u>*, at::native::(anonymous namespace)::CatArrInputTensorMetadata<at::native::(anonymous namespace)::OpaqueType<4u>, unsigned int, 128, 1>, at::native::(anonymous namespace)::TensorSizeStride<unsigned int, 4u>, int, unsigned int): 6.969933
+    void at::native::(anonymous namespace)::CatArrayBatchedCopy<at::native::(anonymous namespace)::OpaqueType<4u>, unsigned int, 4, 64, 64>(at::native::(anonymous namespace)::OpaqueType<4u>*, at::native::(anonymous namespace)::CatArrInputTensorMetadata<at::native::(anonymous namespace)::OpaqueType<4u>, unsigned int, 64, 64>, at::native::(anonymous namespace)::TensorSizeStride<unsigned int, 4u>, int, unsigned int): 6.055361
+    void at::native::vectorized_elementwise_kernel<2, at::native::FillFunctor<long>, std::array<char*, 1ul> >(int, at::native::FillFunctor<long>, std::array<char*, 1ul>): 5.614705
+    void at::native::(anonymous namespace)::indexSelectSmallIndex<float, long, unsigned int, 2, 2, -2>(at::cuda::detail::TensorInfo<float, unsigned int>, at::cuda::detail::TensorInfo<float const, unsigned int>, at::cuda::detail::TensorInfo<long const, unsigned int>, int, int, unsigned int, long): 5.504168
+    void (anonymous namespace)::elementwise_kernel_with_index<int, at::native::arange_cuda_out(c10::Scalar const&, c10::Scalar const&, c10::Scalar const&, at::Tensor&)::{lambda()#1}::operator()() const::{lambda()#4}::operator()() const::{lambda(long)#1}>(int, at::native::arange_cuda_out(c10::Scalar const&, c10::Scalar const&, c10::Scalar const&, at::Tensor&)::{lambda()#1}::operator()() const::{lambda()#4}::operator()() const::{lambda(long)#1}, function_traits<at::native::arange_cuda_out(c10::Scalar const&, c10::Scalar const&, c10::Scalar const&, at::Tensor&)::{lambda()#1}::operator()() const::{lambda()#4}::operator()() const::{lambda(long)#1}>::result_type*): 5.285447
+    void at::native::vectorized_elementwise_kernel<2, at::native::CUDAFunctorOnSelf_add<long>, std::array<char*, 2ul> >(int, at::native::CUDAFunctorOnSelf_add<long>, std::array<char*, 2ul>): 5.003289
+    void at::native::vectorized_elementwise_kernel<4, at::native::CUDAFunctor_add<float>, std::array<char*, 3ul> >(int, at::native::CUDAFunctor_add<float>, std::array<char*, 3ul>): 3.499604
+    void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<float>, std::array<char*, 1ul> >(int, at::native::FillFunctor<float>, std::array<char*, 1ul>): 3.484417
+    void at::native::vectorized_elementwise_kernel<4, at::native::AUnaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, std::array<char*, 2ul> >(int, at::native::AUnaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, std::array<char*, 2ul>): 3.372940
+    void at::native::vectorized_elementwise_kernel<4, at::native::(anonymous namespace)::pow_tensor_scalar_kernel_impl<float, float>(at::TensorIteratorBase&, float)::{lambda(float)#2}, std::array<char*, 2ul> >(int, at::native::(anonymous namespace)::pow_tensor_scalar_kernel_impl<float, float>(at::TensorIteratorBase&, float)::{lambda(float)#2}, std::array<char*, 2ul>): 3.331814
+    fmha_cutlassF_f32_aligned_64x64_rf_sm80(PyTorchMemEffAttention::AttentionKernel<float, cutlass::arch::Sm80, true, 64, 64, 64, true, true>::Params): 2.933694
+    void at::native::(anonymous namespace)::vectorized_layer_norm_kernel<float, float>(int, float, float const*, float const*, float const*, float*, float*, float*): 2.834937
+    void gemmSN_NN_kernel<float, 128, 2, 4, 8, 7, 4, true, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float> >(cublasGemmSmallNParams<cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float>, float>): 2.542126
+    void at::native::vectorized_elementwise_kernel<4, at::native::tanh_kernel_cuda(at::TensorIteratorBase&)::{lambda()#2}::operator()() const::{lambda()#2}::operator()() const::{lambda(float)#1}, std::array<char*, 2ul> >(int, at::native::tanh_kernel_cuda(at::TensorIteratorBase&)::{lambda()#2}::operator()() const::{lambda()#2}::operator()() const::{lambda(float)#1}, std::array<char*, 2ul>): 2.384495
+    std::enable_if<true, void>::type internal::gemvx::kernel<int, int, float, float, float, float, true, true, false, false, 7, false, cublasGemvParamsEx<int, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float>, float> >(cublasGemvParamsEx<int, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float>, float>): 1.961580
+    void at::native::vectorized_elementwise_kernel<4, at::native::CUDAFunctorOnSelf_add<float>, std::array<char*, 2ul> >(int, at::native::CUDAFunctorOnSelf_add<float>, std::array<char*, 2ul>): 1.906881
+    void at::native::vectorized_elementwise_kernel<4, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, std::array<char*, 3ul> >(int, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, std::array<char*, 3ul>): 1.858224
+    std::enable_if<!(false), void>::type internal::gemvx::kernel<int, int, float, float, float, float, false, true, false, false, 8, false, cublasGemvParamsEx<int, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float>, float> >(cublasGemvParamsEx<int, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float>, float>): 1.485776
+    void at::native::reduce_kernel<512, 1, at::native::ReduceOp<float, at::native::ArgMaxOps<float>, unsigned int, long, 4, 4> >(at::native::ReduceOp<float, at::native::ArgMaxOps<float>, unsigned int, long, 4, 4>): 1.345009
+                                  Memcpy DtoH (Device -> Pinned): 1.313434
+    cutlass3x_sm100_tensorop_s128x64x8tf32gemm_f32_f32_f32_f32_f32_128x64x32_0_nnn_align4_2sm_epi_tma_bias_f32_relu: 1.092666
+    void gemv2T_kernel_val<int, int, float, float, float, float, 128, 16, 4, 4, false, false, cublasGemvParamsEx<int, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float>, float> >(cublasGemvParamsEx<int, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float>, float>, float, float): 0.158868
+    void gemmSN_TN_kernel<float, 128, 16, 2, 4, 14, 15, false, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float> >(cublasGemmSmallNParams<cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float>, float>): 0.101421
+
+  TIMING DDI by tensor_size:
+                                                            <1KB: 3.208646
+
+  ORDER DDI by decode_step:
+                                                         prefill: 0.000000
+                                                               1: 0.000000
+                                                               2: 0.000000
+                                                               3: 0.000000
+                                                               4: 0.000000
+                                                               5: 0.000000
+                                                               6: 0.000000
+                                                               7: 0.000000
+                                                               8: 0.000000
+                                                               9: 0.000000
+                                                              10: 0.000000
+                                                              11: 0.000000
+                                                              12: 0.000000
+                                                              13: 0.000000
+                                                              14: 0.000000
+                                                              15: 0.000000
+                                                              16: 0.000000
+                                                              17: 0.000000
+                                                              18: 0.000000
+                                                              19: 0.000000
+                                                              20: 0.000000
+                                                              21: 0.000000
+                                                              22: 0.000000
+                                                              23: 0.000000
+                                                              24: 0.000000
+                                                              25: 0.000000
+                                                              26: 0.000000
+                                                              27: 0.000000
+                                                              28: 0.000000
+                                                              29: 0.000000
+                                                              30: 0.000000
+                                                              31: 0.000000
+                                                              32: 0.000000
+                                                              33: 0.000000
+                                                              34: 0.000000
+                                                              35: 0.000000
+                                                              36: 0.000000
+                                                              37: 0.000000
+                                                              38: 0.000000
+                                                              39: 0.000000
+                                                              40: 0.000000
+
+  ORDER DDI by kernel_type:
+    void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<float>, std::array<char*, 1ul> >(int, at::native::FillFunctor<float>, std::array<char*, 1ul>): 0.000000
+    void at::native::(anonymous namespace)::indexSelectSmallIndex<float, long, unsigned int, 2, 2, -2>(at::cuda::detail::TensorInfo<float, unsigned int>, at::cuda::detail::TensorInfo<float const, unsigned int>, at::cuda::detail::TensorInfo<long const, unsigned int>, int, int, unsigned int, long): 0.000000
+    void at::native::vectorized_elementwise_kernel<2, at::native::FillFunctor<long>, std::array<char*, 1ul> >(int, at::native::FillFunctor<long>, std::array<char*, 1ul>): 0.000000
+    void (anonymous namespace)::elementwise_kernel_with_index<int, at::native::arange_cuda_out(c10::Scalar const&, c10::Scalar const&, c10::Scalar const&, at::Tensor&)::{lambda()#1}::operator()() const::{lambda()#4}::operator()() const::{lambda(long)#1}>(int, at::native::arange_cuda_out(c10::Scalar const&, c10::Scalar const&, c10::Scalar const&, at::Tensor&)::{lambda()#1}::operator()() const::{lambda()#4}::operator()() const::{lambda(long)#1}, function_traits<at::native::arange_cuda_out(c10::Scalar const&, c10::Scalar const&, c10::Scalar const&, at::Tensor&)::{lambda()#1}::operator()() const::{lambda()#4}::operator()() const::{lambda(long)#1}>::result_type*): 0.000000
+    void at::native::vectorized_elementwise_kernel<2, at::native::CUDAFunctorOnSelf_add<long>, std::array<char*, 2ul> >(int, at::native::CUDAFunctorOnSelf_add<long>, std::array<char*, 2ul>): 0.000000
+    void at::native::vectorized_elementwise_kernel<4, at::native::CUDAFunctor_add<float>, std::array<char*, 3ul> >(int, at::native::CUDAFunctor_add<float>, std::array<char*, 3ul>): 0.000000
+    void at::native::(anonymous namespace)::vectorized_layer_norm_kernel<float, float>(int, float, float const*, float const*, float const*, float*, float*, float*): 0.000000
+    void gemmSN_NN_kernel<float, 128, 2, 4, 8, 7, 4, true, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float> >(cublasGemmSmallNParams<cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float>, float>): 0.000000
+    void at::native::(anonymous namespace)::CatArrayBatchedCopy<at::native::(anonymous namespace)::OpaqueType<4u>, unsigned int, 4, 64, 64>(at::native::(anonymous namespace)::OpaqueType<4u>*, at::native::(anonymous namespace)::CatArrInputTensorMetadata<at::native::(anonymous namespace)::OpaqueType<4u>, unsigned int, 64, 64>, at::native::(anonymous namespace)::TensorSizeStride<unsigned int, 4u>, int, unsigned int): 0.000000
+    fmha_cutlassF_f32_aligned_64x64_rf_sm80(PyTorchMemEffAttention::AttentionKernel<float, cutlass::arch::Sm80, true, 64, 64, 64, true, true>::Params): 0.000000
+    void at::native::vectorized_elementwise_kernel<4, at::native::AUnaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, std::array<char*, 2ul> >(int, at::native::AUnaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, std::array<char*, 2ul>): 0.000000
+    void at::native::vectorized_elementwise_kernel<4, at::native::(anonymous namespace)::pow_tensor_scalar_kernel_impl<float, float>(at::TensorIteratorBase&, float)::{lambda(float)#2}, std::array<char*, 2ul> >(int, at::native::(anonymous namespace)::pow_tensor_scalar_kernel_impl<float, float>(at::TensorIteratorBase&, float)::{lambda(float)#2}, std::array<char*, 2ul>): 0.000000
+    void at::native::vectorized_elementwise_kernel<4, at::native::tanh_kernel_cuda(at::TensorIteratorBase&)::{lambda()#2}::operator()() const::{lambda()#2}::operator()() const::{lambda(float)#1}, std::array<char*, 2ul> >(int, at::native::tanh_kernel_cuda(at::TensorIteratorBase&)::{lambda()#2}::operator()() const::{lambda()#2}::operator()() const::{lambda(float)#1}, std::array<char*, 2ul>): 0.000000
+    void at::native::vectorized_elementwise_kernel<4, at::native::CUDAFunctorOnSelf_add<float>, std::array<char*, 2ul> >(int, at::native::CUDAFunctorOnSelf_add<float>, std::array<char*, 2ul>): 0.000000
+    void at::native::vectorized_elementwise_kernel<4, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, std::array<char*, 3ul> >(int, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, std::array<char*, 3ul>): 0.000000
+    void gemmSN_TN_kernel<float, 128, 16, 2, 4, 14, 15, false, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float> >(cublasGemmSmallNParams<cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float>, float>): 0.000000
+    void at::native::reduce_kernel<512, 1, at::native::ReduceOp<float, at::native::ArgMaxOps<float>, unsigned int, long, 4, 4> >(at::native::ReduceOp<float, at::native::ArgMaxOps<float>, unsigned int, long, 4, 4>): 0.000000
+                                  Memcpy DtoH (Device -> Pinned): 0.000000
+    cutlass3x_sm100_tensorop_s128x64x8tf32gemm_f32_f32_f32_f32_f32_128x64x32_0_nnn_align4_2sm_epi_tma_bias_f32_relu: 0.000000
+    void at::native::(anonymous namespace)::CatArrayBatchedCopy_alignedK_contig<at::native::(anonymous namespace)::OpaqueType<4u>, unsigned int, 4, 128, 1, 16>(at::native::(anonymous namespace)::OpaqueType<4u>*, at::native::(anonymous namespace)::CatArrInputTensorMetadata<at::native::(anonymous namespace)::OpaqueType<4u>, unsigned int, 128, 1>, at::native::(anonymous namespace)::TensorSizeStride<unsigned int, 4u>, int, unsigned int): 0.000000
+    std::enable_if<true, void>::type internal::gemvx::kernel<int, int, float, float, float, float, true, true, false, false, 7, false, cublasGemvParamsEx<int, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float>, float> >(cublasGemvParamsEx<int, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float>, float>): 0.000000
+    std::enable_if<!(false), void>::type internal::gemvx::kernel<int, int, float, float, float, float, false, true, false, false, 8, false, cublasGemvParamsEx<int, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float>, float> >(cublasGemvParamsEx<int, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float>, float>): 0.000000
+    void gemv2T_kernel_val<int, int, float, float, float, float, 128, 16, 4, 4, false, false, cublasGemvParamsEx<int, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float>, float> >(cublasGemvParamsEx<int, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float>, float>, float, float): 0.000000
+
+  ORDER DDI by tensor_size:
+                                                            <1KB: 0.000000
+
+=== Top 10 kernels by Timing DDI ===
+  DDI=6.9699  count=  960  void at::native::(anonymous namespace)::CatArrayBatchedCopy_alignedK_contig<at::
+  DDI=6.0554  count=   24  void at::native::(anonymous namespace)::CatArrayBatchedCopy<at::native::(anonymo
+  DDI=5.6147  count=   82  void at::native::vectorized_elementwise_kernel<2, at::native::FillFunctor<long>,
+  DDI=5.5042  count=   82  void at::native::(anonymous namespace)::indexSelectSmallIndex<float, long, unsig
+  DDI=5.2854  count=   41  void (anonymous namespace)::elementwise_kernel_with_index<int, at::native::arang
+  DDI=5.0033  count=   41  void at::native::vectorized_elementwise_kernel<2, at::native::CUDAFunctorOnSelf_
+  DDI=3.4996  count= 1517  void at::native::vectorized_elementwise_kernel<4, at::native::CUDAFunctor_add<fl
+  DDI=3.4844  count= 3731  void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<float>
+  DDI=3.3729  count= 1476  void at::native::vectorized_elementwise_kernel<4, at::native::AUnaryFunctor<floa
+  DDI=3.3318  count=  492  void at::native::vectorized_elementwise_kernel<4, at::native::(anonymous namespa
+
+=== Profiling tools check ===
+  ncu: /usr/local/bin/ncu
+  nsys: /usr/local/cuda/bin/nsys
+  nv-nsight-cu-cli: NOT FOUND
+
+Results saved to results/timing_breakdown.json
+DONE.

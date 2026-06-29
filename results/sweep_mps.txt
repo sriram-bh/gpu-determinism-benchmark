@@ -1,0 +1,124 @@
+
+=============
+== PyTorch ==
+=============
+
+NVIDIA Release 25.08 (build 197421315)
+PyTorch Version 2.8.0a0+34c6371
+Container image Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+Copyright (c) 2014-2024 Facebook Inc.
+Copyright (c) 2011-2014 Idiap Research Institute (Ronan Collobert)
+Copyright (c) 2012-2014 Deepmind Technologies    (Koray Kavukcuoglu)
+Copyright (c) 2011-2012 NEC Laboratories America (Koray Kavukcuoglu)
+Copyright (c) 2011-2013 NYU                      (Clement Farabet)
+Copyright (c) 2006-2010 NEC Laboratories America (Ronan Collobert, Leon Bottou, Iain Melvin, Jason Weston)
+Copyright (c) 2006      Idiap Research Institute (Samy Bengio)
+Copyright (c) 2001-2004 Idiap Research Institute (Ronan Collobert, Samy Bengio, Johnny Mariethoz)
+Copyright (c) 2015      Google Inc.
+Copyright (c) 2015      Yangqing Jia
+Copyright (c) 2013-2016 The Caffe contributors
+All rights reserved.
+
+Various files include modifications (c) NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+
+GOVERNING TERMS: The software and materials are governed by the NVIDIA Software License Agreement
+(found at https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-software-license-agreement/)
+and the Product-Specific Terms for NVIDIA AI Products
+(found at https://www.nvidia.com/en-us/agreements/enterprise-software/product-specific-terms-for-ai-products/).
+
+NOTE: The SHMEM allocation limit is set to the default of 64MB.  This may be
+   insufficient for PyTorch.  NVIDIA recommends the use of the following flags:
+   docker run --gpus all --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 ...
+
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+--- MPS ON ---
+Device: NVIDIA Thor
+Decode steps: 40
+MPS active: True
+Mode: --mps
+
+============================================================
+STEP 1: CLOCK STATE CHECK
+============================================================
+  jetson_clocks check failed: [Errno 2] No such file or directory: 'sudo'
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 15771.27it/s]
+
+Running 3 warmup passes...
+
+=== BASELINE (no contention) ===
+  Events: 13530
+  Step 24: 2949 µs, Step 25: 2916 µs, ratio: 0.99
+  No step-25 anomaly. Clocks appear stable.
+
+============================================================
+STEPS 2-4: MPS MITIGATION EXPERIMENTS
+============================================================
+
+=== SameProc ===
+  [align_events] WARNING: 49243 observed kernels had no match in G* (GPU dispatched something unexpected).
+  Events: 62773, Matched: 13530
+  Timing DDI: 0.086831
+
+=== CrossProc ===
+  Starting contention process (priority=0)...
+  Events: 13530, Matched: 13530
+  Timing DDI: 0.512906
+
+=== StreamPrio ===
+  Starting contention process (priority=-1)...
+  Events: 13530, Matched: 13530
+  Timing DDI: 0.433525
+
+=== SM_50% ===
+  Starting contention process (priority=0)...
+  Events: 13530, Matched: 13530
+  Timing DDI: 0.574924
+
+=== SM_70% ===
+  Starting contention process (priority=0)...
+  Events: 13530, Matched: 13530
+  Timing DDI: 0.827538
+
+=== SM_90% ===
+  Starting contention process (priority=0)...
+  Events: 13530, Matched: 13530
+  Timing DDI: 1.061090
+
+=== Prio+SM50% ===
+  Starting contention process (priority=-1)...
+  Events: 13530, Matched: 13530
+  Timing DDI: 0.534212
+
+============================================================
+MPS RESULTS SUMMARY
+============================================================
+Kernel                                                 SameProc    CrossProc   StreamPrio       SM_50%       SM_70%       SM_90%   Prio+SM50%
+---------------------------------------------------------------------------------------------------------------------------------------------
+Memcpy DtoH (Device -> Pinned)                           0.1913       0.9042       0.8969       0.9101       1.1710       1.2161       0.7734
+cutlass3x_sm100_tensorop_s128x64x8tf32gemm_f32_f         0.0388       0.3767       0.4188       0.5005       0.5609       0.8329       0.4650
+fmha_cutlassF_f32_aligned_64x64_rf_sm80(PyTorchM         0.0202       0.8620       0.5431       0.4650       0.5504       1.4661       0.3991
+std::enable_if<!(false), void>::type internal::g         0.0612       0.2838       0.6965       0.3781       0.4624       0.5225       0.3258
+std::enable_if<true, void>::type internal::gemvx         0.1008       0.4137       0.4725       0.5733       0.5806       0.6607       0.5027
+void (anonymous namespace)::elementwise_kernel_w         1.1533       0.5493       0.3421       1.0712       0.7861       1.2226       0.5755
+void at::native::(anonymous namespace)::CatArray         0.0166       0.0098       0.0195       0.0461       0.0118       0.0166       0.1476
+void at::native::(anonymous namespace)::CatArray         0.0621       0.5829       0.5763       0.7730       1.1370       2.2537       0.7022
+void at::native::(anonymous namespace)::indexSel         0.8708       0.3901       0.5659       0.6596       0.7906       0.9321       0.5362
+void at::native::(anonymous namespace)::vectoriz         0.0936       0.2922       0.1794       0.2476       0.3409       0.4493       0.2264
+void at::native::reduce_kernel<512, 1, at::nativ         0.0336       0.6414       0.6262       0.1963       0.3285       0.9128       0.5296
+void at::native::vectorized_elementwise_kernel<2         0.5813       0.4411       0.4340       0.5445       0.6564       0.7897       0.4668
+void at::native::vectorized_elementwise_kernel<2         0.4820       0.4075       0.4360       0.7600       0.7908       1.1991       0.4110
+void at::native::vectorized_elementwise_kernel<4         0.1028       0.2150       0.1605       1.0342       1.7100       1.9626       0.8862
+void at::native::vectorized_elementwise_kernel<4         0.0965       0.6176       0.5275       0.8427       1.5872       1.3829       0.7498
+void at::native::vectorized_elementwise_kernel<4         0.1456       0.3824       0.3019       0.5121       0.7837       1.0483       0.5632
+void at::native::vectorized_elementwise_kernel<4         0.1054       0.4913       0.4552       0.7509       0.8729       1.0939       0.7226
+void at::native::vectorized_elementwise_kernel<4         0.0629       0.8320       0.6256       0.7084       1.0005       1.3113       0.6581
+void at::native::vectorized_elementwise_kernel<4         0.0677       0.5131       0.3609       0.4192       0.5916       0.7777       0.4143
+void at::native::vectorized_elementwise_kernel<4         0.0714       0.3264       0.2714       0.7459       0.9439       0.6892       0.7086
+void gemmSN_NN_kernel<float, 128, 2, 4, 8, 7, 4,         0.0309       0.0264       0.0381       0.0387       0.0243       0.0329       0.0365
+void gemmSN_TN_kernel<float, 128, 16, 2, 4, 14,          0.0032       0.0008       0.0091       0.0095       0.0091       0.0109       0.0093
+void gemv2T_kernel_val<int, int, float, float, f         0.0332       0.1209       1.5049       0.1525       0.1344       0.1599       0.8484
+OVERALL                                                  0.0868       0.5129       0.4335       0.5749       0.8275       1.0611       0.5342
+
+Results saved to results/full_mitigation_sweep.json
+ALL DONE.

@@ -1,0 +1,118 @@
+Device: NVIDIA Thor
+PyTorch: 2.8.0a0+34c6371d24.nv25.08
+Decode steps: 40
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 15442.10it/s]
+
+Compiling model with torch.compile (inductor backend)...
+  Running compilation warmup (first pass triggers JIT)...
+W0626 23:08:47.516000 153 torch/_inductor/utils.py:1416] [0/0] Not enough SMs to use max_autotune_gemm mode
+  Compilation successful.
+
+Running 3 warmup passes (eager)...
+
+=== Condition 1: EAGER BASELINE (Config A) ===
+
+  [Eager baseline]
+  Total events: 13530
+  Distinct kernel names: 23
+  Events per step (avg): 330
+  Top 10 kernels:
+     3731x  void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<f
+     1517x  void at::native::vectorized_elementwise_kernel<4, at::native::CUDAFunctor_a
+     1476x  void at::native::vectorized_elementwise_kernel<4, at::native::AUnaryFunctor
+     1025x  void at::native::(anonymous namespace)::vectorized_layer_norm_kernel<float,
+      960x  cutlass3x_sm100_tensorop_s128x64x8tf32gemm_f32_f32_f32_f32_f32_128x64x32_0_
+      960x  void at::native::(anonymous namespace)::CatArrayBatchedCopy_alignedK_contig
+      492x  fmha_cutlassF_f32_aligned_64x64_rf_sm80(PyTorchMemEffAttention::AttentionKe
+      492x  void at::native::vectorized_elementwise_kernel<4, at::native::(anonymous na
+      492x  void at::native::vectorized_elementwise_kernel<4, at::native::tanh_kernel_c
+      492x  void at::native::vectorized_elementwise_kernel<4, at::native::CUDAFunctorOn
+
+=== Condition 2: EAGER + CONTENTION (Config B-2streams) ===
+
+  [Eager contended]
+  Total events: 62773
+  Distinct kernel names: 27
+  Events per step (avg): 1531
+  Top 10 kernels:
+    24600x  void at::cuda::cub::calc_block_sums<512, 16, false, float, float>(float con
+    24600x  void at::cuda::cub::final_scan_kernel<512, 16, float>(float const*, float*,
+     3731x  void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<f
+     1517x  void at::native::vectorized_elementwise_kernel<4, at::native::CUDAFunctor_a
+     1476x  void at::native::vectorized_elementwise_kernel<4, at::native::AUnaryFunctor
+     1025x  void at::native::(anonymous namespace)::vectorized_layer_norm_kernel<float,
+      960x  cutlass3x_sm100_tensorop_s128x64x8tf32gemm_f32_f32_f32_f32_f32_128x64x32_0_
+      960x  void at::native::(anonymous namespace)::CatArrayBatchedCopy_alignedK_contig
+      492x  fmha_cutlassF_f32_aligned_64x64_rf_sm80(PyTorchMemEffAttention::AttentionKe
+      492x  void at::native::vectorized_elementwise_kernel<4, at::native::(anonymous na
+  Tokens match baseline: True
+  [align_events] WARNING: 49243 observed kernels had no match in G* (GPU dispatched something unexpected).
+
+  Eager Timing DDI: 2.713075
+
+=== Condition 3: COMPILED BASELINE (Config A + torch.compile) ===
+
+  [Compiled baseline]
+  Total events: 9625
+  Distinct kernel names: 37
+  Events per step (avg): 235
+  Top 10 kernels:
+      984x  triton_poi_fused_cat_1
+      984x  triton_poi_fused_cat_2
+      984x  triton_poi_fused__scaled_dot_product_efficient_attention_3
+      960x  cutlass3x_sm100_tensorop_s128x64x8tf32gemm_f32_f32_f32_f32_f32_128x64x32_0_
+      960x  triton_poi_fused_add_mul_pow_tanh_5
+      880x  triton_per_fused_add_native_layer_norm_6
+      880x  triton_per_fused_add_native_layer_norm_7
+      606x  void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<f
+      492x  fmha_cutlassF_f32_aligned_64x64_rf_sm80(PyTorchMemEffAttention::AttentionKe
+      480x  std::enable_if<!(false), void>::type internal::gemvx::kernel<int, int, floa
+  Tokens match eager baseline: True
+
+=== Condition 4: COMPILED + CONTENTION (Config B + torch.compile) ===
+
+  [Compiled contended]
+  Total events: 58350
+  Distinct kernel names: 31
+  Events per step (avg): 1423
+  Top 10 kernels:
+    24600x  void at::cuda::cub::calc_block_sums<512, 16, false, float, float>(float con
+    24600x  void at::cuda::cub::final_scan_kernel<512, 16, float>(float const*, float*,
+      984x  triton_poi_fused_cat_1
+      984x  triton_poi_fused_cat_2
+      984x  triton_poi_fused__scaled_dot_product_efficient_attention_3
+      960x  cutlass3x_sm100_tensorop_s128x64x8tf32gemm_f32_f32_f32_f32_f32_128x64x32_0_
+      960x  triton_poi_fused_add_mul_pow_tanh_5
+      880x  triton_per_fused_add_native_layer_norm_6
+      880x  triton_per_fused_add_native_layer_norm_7
+      492x  void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<f
+  Tokens match compiled baseline: True
+  [align_events] WARNING: 49202 observed kernels had no match in G* (GPU dispatched something unexpected).
+  [align_events] WARNING: 477 G* kernels were never matched in the observed run (GPU skipped or merged something).
+
+  Compiled Timing DDI: 3.227317
+
+============================================================
+COMPARISON: Eager vs Compiled under contention
+============================================================
+  Kernels per step:  Eager=330  Compiled=235  Reduction=29%
+  Timing DDI:        Eager=2.7131  Compiled=3.2273  Reduction=-19%
+  Distinct kernels:  Eager=23  Compiled=37
+
+  Top 5 jitter kernels (EAGER):
+    DDI=6.2838  void at::native::(anonymous namespace)::CatArrayBatchedCopy_alignedK_c
+    DDI=5.9266  void (anonymous namespace)::elementwise_kernel_with_index<int, at::nat
+    DDI=5.7944  void at::native::(anonymous namespace)::indexSelectSmallIndex<float, l
+    DDI=5.5229  void at::native::vectorized_elementwise_kernel<2, at::native::FillFunc
+    DDI=4.3798  void at::native::(anonymous namespace)::CatArrayBatchedCopy<at::native
+
+  Top 5 jitter kernels (COMPILED):
+    DDI=26.2305  Activity Buffer Request
+    DDI=5.8634  triton_poi_fused_addmm_7
+    DDI=5.1512  triton_poi_fused_addmm_4
+    DDI=5.0216  fmha_cutlassF_f32_aligned_64x64_rf_sm80(PyTorchMemEffAttention::Attent
+    DDI=5.0108  triton_per_fused_add_embedding_native_layer_norm_5
+
+Results saved to results/torch_compile_mitigation.json
+DONE.

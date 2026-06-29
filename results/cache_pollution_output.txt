@@ -1,0 +1,139 @@
+Device: NVIDIA Thor
+L2 Cache: 33554432 bytes = 32 MiB
+SMs: 20
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 12317.10it/s]
+
+Running 3 warmup passes...
+
+=== Condition 1: WARM CACHE ===
+  Events: 13530
+
+=== Condition 2: COLD CACHE (64 MiB L2 flush before every step) ===
+  Pollution buffer: 16777216 float32 = 64.0 MiB
+  L2 cache size: 32.0 MiB
+  Buffer / L2 ratio: 2.0x
+  Events: 13571
+  Tokens match warm: True
+  Pollution copy durations: avg=0.976ms, min=0.646ms, max=1.073ms
+
+=== Timing DDI: Cold Cache vs Warm Cache ===
+  [align_events] WARNING: 41 observed kernels had no match in G* (GPU dispatched something unexpected).
+  Matched pairs: 13530
+  Overall Timing DDI: 0.078550
+
+  Timing DDI by kernel type (sorted by impact):
+    0.4689  Memcpy DtoH (Device -> Pinned)
+    0.1525  void at::native::vectorized_elementwise_kernel<4, at::native::CUDAFunctorOnSelf_
+    0.1263  void at::native::(anonymous namespace)::CatArrayBatchedCopy_alignedK_contig<at::
+    0.1148  void at::native::vectorized_elementwise_kernel<4, at::native::AUnaryFunctor<floa
+    0.1132  void (anonymous namespace)::elementwise_kernel_with_index<int, at::native::arang
+    0.1121  void at::native::vectorized_elementwise_kernel<4, at::native::tanh_kernel_cuda(a
+    0.1090  void at::native::(anonymous namespace)::indexSelectSmallIndex<float, long, unsig
+    0.0931  std::enable_if<true, void>::type internal::gemvx::kernel<int, int, float, float,
+    0.0885  void at::native::vectorized_elementwise_kernel<4, at::native::(anonymous namespa
+    0.0806  void at::native::vectorized_elementwise_kernel<4, at::native::CUDAFunctor_add<fl
+    0.0781  void at::native::vectorized_elementwise_kernel<4, at::native::BinaryFunctor<floa
+    0.0654  cutlass3x_sm100_tensorop_s128x64x8tf32gemm_f32_f32_f32_f32_f32_128x64x32_0_nnn_a
+    0.0575  void at::native::vectorized_elementwise_kernel<2, at::native::CUDAFunctorOnSelf_
+    0.0563  void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<float>
+    0.0475  void at::native::(anonymous namespace)::vectorized_layer_norm_kernel<float, floa
+    0.0364  std::enable_if<!(false), void>::type internal::gemvx::kernel<int, int, float, fl
+    0.0339  void gemmSN_NN_kernel<float, 128, 2, 4, 8, 7, 4, true, cublasGemvTensorStridedBa
+    0.0316  void at::native::reduce_kernel<512, 1, at::native::ReduceOp<float, at::native::A
+    0.0267  fmha_cutlassF_f32_aligned_64x64_rf_sm80(PyTorchMemEffAttention::AttentionKernel<
+    0.0253  void gemv2T_kernel_val<int, int, float, float, float, float, 128, 16, 4, 4, fals
+    0.0183  void at::native::vectorized_elementwise_kernel<2, at::native::FillFunctor<long>,
+    0.0133  void at::native::(anonymous namespace)::CatArrayBatchedCopy<at::native::(anonymo
+    0.0009  void gemmSN_TN_kernel<float, 128, 16, 2, 4, 14, 15, false, cublasGemvTensorStrid
+
+  Timing DDI by decode step:
+         prefill: 0.032283
+          step 1: 0.180384
+          step 2: 0.052270
+          step 3: 0.040762
+          step 4: 0.023849
+          step 5: 0.143366
+          step 6: 0.031866
+          step 7: 0.155287
+          step 8: 0.180435
+          step 9: 0.023809
+         step 10: 0.097011
+         step 11: 0.039253
+         step 12: 0.047811
+         step 13: 0.057146
+         step 14: 0.051231
+         step 15: 0.158773
+         step 16: 0.035259
+         step 17: 0.059434
+         step 18: 0.048603
+         step 19: 0.157782
+         step 20: 0.022473
+         step 21: 0.164185
+         step 22: 0.020958
+         step 23: 0.038328
+         step 24: 0.159436
+         step 25: 0.118446
+         step 26: 0.052664
+         step 27: 0.083993
+         step 28: 0.023194
+         step 29: 0.041425
+         step 30: 0.118838
+         step 31: 0.128860
+         step 32: 0.028381
+         step 33: 0.022116
+         step 34: 0.215084
+         step 35: 0.024691
+         step 36: 0.032382
+         step 37: 0.028722
+         step 38: 0.193440
+         step 39: 0.029155
+         step 40: 0.057175
+
+=== Per-step total CUDA time (µs) ===
+  Step    Warm (µs)    Cold (µs)    Ratio
+------------------------------------------
+     0       5284.0       5865.0    1.11x
+     1       2850.0       3536.0    1.24x
+     2       2874.4       3447.7    1.20x
+     3       2873.0       3432.8    1.19x
+     4       2839.9       3433.2    1.21x
+     5       2847.2       3506.1    1.23x
+     6       2860.8       3427.5    1.20x
+     7       2890.1       3512.6    1.22x
+     8       2915.4       3530.3    1.21x
+     9       2848.4       3502.5    1.23x
+    10       2945.4       3523.3    1.20x
+    11       2918.0       3441.7    1.18x
+    12       2905.2       3476.5    1.20x
+    13       2853.5       3531.9    1.24x
+    14       2849.7       3473.1    1.22x
+    15       2883.5       3526.9    1.22x
+    16       2907.9       3445.2    1.18x
+    17       2928.9       3520.1    1.20x
+    18       2969.2       3444.4    1.16x
+    19       2976.9       3503.6    1.18x
+    20       2871.6       3452.4    1.20x
+    21       2904.4       3615.5    1.24x
+    22       2868.2       3556.8    1.24x
+    23       2916.5       3505.7    1.20x
+    24       2918.3       3545.2    1.21x
+    25       2984.4       3518.3    1.18x
+    26       2927.7       3472.8    1.19x
+    27       2885.9       3549.4    1.23x
+    28       2866.0       3462.7    1.21x
+    29       2908.8       3483.5    1.20x
+    30       2955.0       3532.6    1.20x
+    31       2875.4       3532.7    1.23x
+    32       2882.5       3542.0    1.23x
+    33       2871.0       3462.1    1.21x
+    34       2958.5       3573.9    1.21x
+    35       2923.7       3471.8    1.19x
+    36       2904.3       3467.8    1.19x
+    37       2884.4       3476.8    1.21x
+    38       2963.1       3573.2    1.21x
+    39       2886.1       3541.5    1.23x
+    40       3210.8       3476.1    1.08x
+
+Results saved to results/cache_pollution_test.json
+DONE.

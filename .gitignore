@@ -1,0 +1,8 @@
+results/*.sqlite
+results/*.nsys-rep
+results/timing_breakdown.json
+results/gstar_debug_*.json
+results/multistream_order_ddi.json
+results/cache_pollution_test.json
+results/torch_compile_mitigation.json
+results/mps_mitigation.json

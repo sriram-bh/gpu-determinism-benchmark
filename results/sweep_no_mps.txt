@@ -1,0 +1,70 @@
+
+=============
+== PyTorch ==
+=============
+
+NVIDIA Release 25.08 (build 197421315)
+PyTorch Version 2.8.0a0+34c6371
+Container image Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+Copyright (c) 2014-2024 Facebook Inc.
+Copyright (c) 2011-2014 Idiap Research Institute (Ronan Collobert)
+Copyright (c) 2012-2014 Deepmind Technologies    (Koray Kavukcuoglu)
+Copyright (c) 2011-2012 NEC Laboratories America (Koray Kavukcuoglu)
+Copyright (c) 2011-2013 NYU                      (Clement Farabet)
+Copyright (c) 2006-2010 NEC Laboratories America (Ronan Collobert, Leon Bottou, Iain Melvin, Jason Weston)
+Copyright (c) 2006      Idiap Research Institute (Samy Bengio)
+Copyright (c) 2001-2004 Idiap Research Institute (Ronan Collobert, Samy Bengio, Johnny Mariethoz)
+Copyright (c) 2015      Google Inc.
+Copyright (c) 2015      Yangqing Jia
+Copyright (c) 2013-2016 The Caffe contributors
+All rights reserved.
+
+Various files include modifications (c) NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+
+GOVERNING TERMS: The software and materials are governed by the NVIDIA Software License Agreement
+(found at https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-software-license-agreement/)
+and the Product-Specific Terms for NVIDIA AI Products
+(found at https://www.nvidia.com/en-us/agreements/enterprise-software/product-specific-terms-for-ai-products/).
+
+NOTE: The SHMEM allocation limit is set to the default of 64MB.  This may be
+   insufficient for PyTorch.  NVIDIA recommends the use of the following flags:
+   docker run --gpus all --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 ...
+
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+--- NO MPS ---
+Device: NVIDIA Thor
+Decode steps: 40
+MPS active: False
+Mode: --l2
+
+============================================================
+STEP 1: CLOCK STATE CHECK
+============================================================
+  jetson_clocks check failed: [Errno 2] No such file or directory: 'sudo'
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 15068.38it/s]
+
+Running 3 warmup passes...
+
+=== BASELINE (no contention) ===
+  Events: 13530
+  Step 24: 2892 µs, Step 25: 2866 µs, ratio: 0.99
+  No step-25 anomaly. Clocks appear stable.
+
+============================================================
+STEP 5: L2 CACHE EFFECT
+============================================================
+
+=== L2 PERSISTENCE TEST ===
+  Note: cudaAccessPolicyWindow requires custom CUDA bindings.
+  Testing L2 effect via cache-warm repeated execution instead.
+
+  --- First run (cold) ---
+  Cold DDI: 0.075176
+
+  --- Second run (warm, L2 resident) ---
+  Warm DDI: 0.059870
+  L2 warmth effect: +20%
+
+Results saved to results/full_mitigation_sweep.json
+ALL DONE.
